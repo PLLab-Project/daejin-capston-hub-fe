@@ -11,12 +11,21 @@ import { NoticePage } from './components/NoticePage'
 import { NoticeDetail } from './components/NoticeDetail'
 import { ProjectCollectionPage } from './components/ProjectCollectionPage'
 import { ProjectRegistrationPage, type ProjectRegistrationData } from './components/ProjectRegistrationPage'
+import { MyPage, type UserProfile } from './components/MyPage'
+import { ConfirmModal } from './components/ConfirmModal'
+import { AdminPage, type AdminNoticeData } from './components/AdminPage'
 import { initialProjects } from './data/projects'
 import { initialNotices } from './data/notices'
 
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
-type CurrentPage = 'gallery' | 'notices' | 'register' | 'my-projects' | 'favorites'
+type CurrentPage = 'gallery' | 'notices' | 'register' | 'my-projects' | 'favorites' | 'my-page' | 'admin'
+
+const initialProfile: UserProfile = {
+  name: '김민정',
+  studentId: '20241472',
+  email: 'minjung2283@gmail.com',
+}
 
 export default function App() {
   const [projects, setProjects] = useState(initialProjects)
@@ -24,13 +33,19 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [authStep, setAuthStep] = useState<AuthStep>('closed')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [hasCompletedInitialProfile, setHasCompletedInitialProfile] = useState(false)
   const [currentPage, setCurrentPage] = useState<CurrentPage>('gallery')
+  const [profile, setProfile] = useState<UserProfile>(initialProfile)
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
   const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(null)
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null)
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
+  const [notices, setNotices] = useState(initialNotices)
   const [page, setPage] = useState(1)
   const selectedProject = projects.find((project) => project.id === selectedProjectId)
-  const selectedNotice = initialNotices.find((notice) => notice.id === selectedNoticeId)
+  const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId)
+  const editingProject = projects.find((project) => project.id === editingProjectId)
   const myProjects = projects.filter((project) => project.owned)
   const favoriteProjects = projects.filter((project) => project.bookmarked)
 
@@ -80,6 +95,18 @@ export default function App() {
     setSelectedNoticeId(null)
     window.scrollTo({ top: 0, behavior: 'auto' })
   }
+  const showMyPage = () => {
+    setCurrentPage('my-page')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showAdmin = () => {
+    setCurrentPage('admin')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
   const showNotice = (id: number) => {
     setCurrentPage('notices')
     setSelectedNoticeId(id)
@@ -109,7 +136,7 @@ export default function App() {
         techStack: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
         longDescription: data.description,
         demoVideoUrl: data.demoVideoUrl || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-        author: '홍길동',
+        author: data.author || profile.name,
         date,
         year: Number(date.slice(0, 4)),
         category: data.category,
@@ -121,6 +148,44 @@ export default function App() {
     showMyProjects()
   }
 
+  const updateProject = (data: ProjectRegistrationData) => {
+    if (editingProjectId === null) return
+
+    setProjects((items) => items.map((project) => project.id === editingProjectId ? {
+      ...project,
+      title: data.title,
+      description: data.summary,
+      detailSummary: data.summary,
+      field: data.category,
+      category: data.category,
+      techStack: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+      longDescription: data.description,
+      demoVideoUrl: data.demoVideoUrl || project.demoVideoUrl,
+    } : project))
+    setEditingProjectId(null)
+  }
+
+  const deleteProject = (id: number) => {
+    setProjects((items) => items.filter((project) => project.id !== id))
+    setSelectedProjectId(null)
+    setPendingDeleteProjectId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+
+  const setProjectApproval = (id: number, approvalStatus: 'approved' | 'rejected') => {
+    setProjects((items) => items.map((project) => project.id === id ? { ...project, approvalStatus } : project))
+  }
+
+  const saveNotice = (id: number | null, data: AdminNoticeData) => {
+    if (id !== null) {
+      setNotices((items) => items.map((notice) => notice.id === id ? { ...notice, ...data } : notice))
+      return
+    }
+
+    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '.')
+    setNotices((items) => [{ id: Math.max(0, ...items.map((notice) => notice.id)) + 1, date, ...data }, ...items])
+  }
+
   const activeItem = currentPage === 'notices'
     ? '공지사항'
     : currentPage === 'register'
@@ -129,6 +194,10 @@ export default function App() {
       ? '내 작품'
       : currentPage === 'favorites'
         ? '즐겨찾기'
+        : currentPage === 'my-page'
+          ? '마이페이지'
+        : currentPage === 'admin'
+          ? '관리자 페이지'
         : '갤러리'
 
   return (
@@ -136,6 +205,7 @@ export default function App() {
       <Header
         menuOpen={menuOpen}
         isLoggedIn={isLoggedIn}
+        isAdmin={isAdmin}
         activeItem={activeItem}
         onMenuToggle={() => setMenuOpen((open) => !open)}
         onGalleryClick={showGallery}
@@ -143,23 +213,63 @@ export default function App() {
         onRegisterClick={showRegistration}
         onMyProjectsClick={showMyProjects}
         onFavoritesClick={showFavorites}
+        onMyPageClick={showMyPage}
+        onAdminClick={showAdmin}
         onLoginClick={() => setAuthStep('login')}
         onLogoutClick={() => {
           setIsLoggedIn(false)
+          setIsAdmin(false)
           setAuthStep('closed')
+          showGallery()
         }}
       />
-      {currentPage === 'notices' ? (
-        selectedNotice ? <NoticeDetail notice={selectedNotice} onBack={showNotices} /> : <NoticePage onOpen={showNotice} />
+      {editingProject ? (
+        <ProjectRegistrationPage
+          key={editingProject.id}
+          mode="edit"
+          initialData={{
+            title: editingProject.title,
+            summary: editingProject.description,
+            category: editingProject.category,
+            techStack: editingProject.techStack.join(', '),
+            description: editingProject.longDescription,
+            demoVideoUrl: editingProject.demoVideoUrl,
+          }}
+          onCancel={() => setEditingProjectId(null)}
+          onSubmit={updateProject}
+        />
+      ) : currentPage === 'notices' ? (
+        selectedNotice ? <NoticeDetail notice={selectedNotice} onBack={showNotices} /> : <NoticePage notices={notices} onOpen={showNotice} />
       ) : currentPage === 'register' ? (
-        <ProjectRegistrationPage onCancel={showGallery} onSubmit={registerProject} />
+        <ProjectRegistrationPage adminMode={isAdmin} onCancel={showGallery} onSubmit={registerProject} />
+      ) : currentPage === 'admin' ? (
+        <AdminPage
+          projects={projects}
+          notices={notices}
+          onApproveProject={(id) => setProjectApproval(id, 'approved')}
+          onRejectProject={(id) => setProjectApproval(id, 'rejected')}
+          onSaveNotice={saveNotice}
+          onDeleteNotice={(id) => setNotices((items) => items.filter((notice) => notice.id !== id))}
+        />
+      ) : currentPage === 'my-page' ? (
+        <MyPage
+          profile={profile}
+          myProjects={myProjects}
+          favoriteProjects={favoriteProjects}
+          onProfileChange={setProfile}
+          onMyProjectsClick={showMyProjects}
+          onFavoritesClick={showFavorites}
+        />
       ) : selectedProject ? (
         <ProjectDetail
           key={selectedProject.id}
           project={selectedProject}
+          viewerRole={isAdmin ? 'admin' : currentPage === 'my-projects' || (isLoggedIn && selectedProject.owned) ? 'owner' : 'guest'}
           backLabel={currentPage === 'favorites' ? '즐겨찾기' : currentPage === 'my-projects' ? '내 작품' : '갤러리'}
           onBack={closeProject}
           onBookmark={toggleBookmark}
+          onEdit={setEditingProjectId}
+          onDelete={setPendingDeleteProjectId}
         />
       ) : currentPage === 'my-projects' ? (
         <ProjectCollectionPage
@@ -206,7 +316,18 @@ export default function App() {
       <LoginModal
         open={authStep === 'login'}
         onClose={() => setAuthStep('closed')}
-        onSubmit={() => {
+        onSubmit={(credentials) => {
+          if (credentials.studentId.trim().toLowerCase() === 'admin') {
+            setIsAdmin(true)
+            setIsLoggedIn(true)
+            setAuthStep('closed')
+            return
+          }
+
+          setIsAdmin(false)
+          if (credentials.studentId.trim()) {
+            setProfile((current) => ({ ...current, studentId: credentials.studentId.trim() }))
+          }
           if (hasCompletedInitialProfile) {
             setIsLoggedIn(true)
             setAuthStep('closed')
@@ -219,10 +340,21 @@ export default function App() {
       <FirstLoginModal
         open={authStep === 'first-login'}
         onClose={() => setAuthStep('closed')}
-        onSubmit={() => {
+        onSubmit={(firstLoginProfile) => {
+          setProfile((current) => ({ ...current, ...firstLoginProfile }))
           setHasCompletedInitialProfile(true)
           setIsLoggedIn(true)
           setAuthStep('closed')
+        }}
+      />
+      <ConfirmModal
+        open={pendingDeleteProjectId !== null}
+        title="작품을 삭제하시겠습니까?"
+        description="삭제한 작품과 등록 파일은 복구할 수 없습니다."
+        confirmLabel="삭제"
+        onCancel={() => setPendingDeleteProjectId(null)}
+        onConfirm={() => {
+          if (pendingDeleteProjectId !== null) deleteProject(pendingDeleteProjectId)
         }}
       />
     </div>

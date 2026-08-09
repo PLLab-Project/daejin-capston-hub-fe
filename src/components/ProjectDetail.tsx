@@ -14,6 +14,9 @@ interface ProjectDetailProps {
   onBookmark: (id: number) => void
   onEdit?: (id: number) => void
   onDelete?: (id: number) => void
+  reviewMode?: boolean
+  onApprove?: (id: number) => void
+  onReject?: (id: number) => void
 }
 
 const downloads = ['발표 보고서 다운로드', '설명 보고서 다운로드', '프로젝트 파일 다운로드']
@@ -37,6 +40,9 @@ export function ProjectDetail({
   onBookmark,
   onEdit,
   onDelete,
+  reviewMode = false,
+  onApprove,
+  onReject,
 }: ProjectDetailProps) {
   const [activeImage, setActiveImage] = useState(2)
   const [carouselStartImage, setCarouselStartImage] = useState(2)
@@ -44,7 +50,7 @@ export function ProjectDetail({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [videoModalOpen, setVideoModalOpen] = useState(false)
   const canEdit = viewerRole === 'owner'
-  const canDelete = viewerRole === 'owner' || viewerRole === 'admin'
+  const canDelete = viewerRole === 'owner' || (viewerRole === 'admin' && !reviewMode)
   const thumbnailTrackImages = getCircularImageSequence(
     carouselStartImage,
     visibleThumbnailCount + slideSteps,
@@ -83,17 +89,23 @@ export function ProjectDetail({
         <ChevronRight className="mx-3 mt-px h-2.5 w-2.5 md:mt-[3px] md:h-3 md:w-3" aria-hidden="true" />
         <span className="min-w-0 truncate text-neutral-600">{project.title} 시스템</span>
 
-        {(canEdit || canDelete) && (
-          <div className="ml-auto flex items-center gap-2 md:hidden">
+        {(canEdit || canDelete || reviewMode) && (
+          <div className={`ml-auto flex items-center gap-2 md:hidden ${reviewMode ? '-mt-[9px]' : '-mt-[6px]'}`}>
             {canEdit && (
               <button type="button" className="detail-icon-button" aria-label="작품 수정" onClick={() => onEdit?.(project.id)}>
                 <Pencil aria-hidden="true" />
               </button>
             )}
             {canDelete && (
-              <button type="button" className="detail-icon-button text-red-400" aria-label="작품 삭제" onClick={() => onDelete?.(project.id)}>
+              <button type="button" className="detail-icon-button is-danger" aria-label="작품 삭제" onClick={() => onDelete?.(project.id)}>
                 <Trash2 aria-hidden="true" />
               </button>
+            )}
+            {reviewMode && (
+              <>
+                <button type="button" className="detail-action-button" onClick={() => onApprove?.(project.id)}>승인</button>
+                <button type="button" className="detail-action-button is-danger" onClick={() => onReject?.(project.id)}>반려</button>
+              </>
             )}
           </div>
         )}
@@ -102,10 +114,12 @@ export function ProjectDetail({
 
       <div className="hidden items-start justify-between pb-2 pt-2 md:flex">
         <ProjectHeading project={project} action={<BookmarkButton project={project} onBookmark={onBookmark} />} />
-        {(canEdit || canDelete) && (
-          <div className="flex items-center gap-2 pt-0.5">
+        {(canEdit || canDelete || reviewMode) && (
+          <div className="flex h-8 items-center gap-2">
             {canEdit && <button type="button" className="detail-action-button" onClick={() => onEdit?.(project.id)}>수정</button>}
-            {canDelete && <button type="button" className="detail-action-button text-red-400" onClick={() => onDelete?.(project.id)}>삭제</button>}
+            {canDelete && <button type="button" className="detail-action-button is-danger" onClick={() => onDelete?.(project.id)}>삭제</button>}
+            {reviewMode && <button type="button" className="detail-action-button" onClick={() => onApprove?.(project.id)}>승인</button>}
+            {reviewMode && <button type="button" className="detail-action-button is-danger" onClick={() => onReject?.(project.id)}>반려</button>}
           </div>
         )}
       </div>

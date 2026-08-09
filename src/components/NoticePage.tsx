@@ -1,20 +1,21 @@
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { initialNotices } from '../data/notices'
+import type { Notice } from '../types/notice'
 
 interface NoticePageProps {
+  notices: Notice[]
   onOpen: (id: number) => void
 }
 
-export function NoticePage({ onOpen }: NoticePageProps) {
+export function NoticePage({ notices, onOpen }: NoticePageProps) {
   const [searchDraft, setSearchDraft] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
 
   const filteredNotices = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
-    if (!keyword) return initialNotices
-    return initialNotices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword))
-  }, [searchKeyword])
+    if (!keyword) return notices
+    return notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword))
+  }, [notices, searchKeyword])
 
   const submitSearch = () => setSearchKeyword(searchDraft.trim())
 

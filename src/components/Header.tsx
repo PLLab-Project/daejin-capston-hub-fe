@@ -1,11 +1,13 @@
 import { Menu, X } from 'lucide-react'
 import type { MouseEvent } from 'react'
 
-const navItems = ['갤러리', '공지사항', '작품 등록', '내 작품', '즐겨찾기', '마이페이지']
+const userNavItems = ['갤러리', '공지사항', '작품 등록', '내 작품', '즐겨찾기', '마이페이지']
+const adminNavItems = ['갤러리', '공지사항', '작품 등록', '즐겨찾기', '관리자 페이지']
 
 interface HeaderProps {
   menuOpen: boolean
   isLoggedIn: boolean
+  isAdmin?: boolean
   activeItem?: string
   onMenuToggle: () => void
   onGalleryClick?: () => void
@@ -13,6 +15,8 @@ interface HeaderProps {
   onRegisterClick?: () => void
   onMyProjectsClick?: () => void
   onFavoritesClick?: () => void
+  onMyPageClick?: () => void
+  onAdminClick?: () => void
   onLoginClick: () => void
   onLogoutClick: () => void
 }
@@ -20,6 +24,7 @@ interface HeaderProps {
 export function Header({
   menuOpen,
   isLoggedIn,
+  isAdmin = false,
   activeItem = '갤러리',
   onMenuToggle,
   onGalleryClick,
@@ -27,9 +32,12 @@ export function Header({
   onRegisterClick,
   onMyProjectsClick,
   onFavoritesClick,
+  onMyPageClick,
+  onAdminClick,
   onLoginClick,
   onLogoutClick,
 }: HeaderProps) {
+  const navItems = isAdmin ? adminNavItems : userNavItems
   const handleAuthClick = () => {
     if (menuOpen) onMenuToggle()
     if (isLoggedIn) {
@@ -53,7 +61,11 @@ export function Header({
           ? onMyProjectsClick
           : item === '즐겨찾기'
             ? onFavoritesClick
-            : undefined
+            : item === '마이페이지'
+              ? onMyPageClick
+              : item === '관리자 페이지'
+                ? onAdminClick
+                : undefined
 
     if (action) {
       event.preventDefault()

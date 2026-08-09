@@ -189,6 +189,7 @@ button { cursor: pointer; }
 
 .first-login-form { margin-top: 20px; }
 .first-login-submit { margin-top: 25px; }
+.profile-edit-submit { margin-top: 24px; }
 
 .page-container {
   width: min(calc(100vw - 32px), 1268px);
@@ -393,17 +394,19 @@ button { cursor: pointer; }
 
 .detail-icon-button {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   place-items: center;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  background: #fff;
-  color: #a1a1aa;
+  border: 0;
+  border-radius: 5px;
+  background: #f3f4f6;
+  color: #858585;
   padding: 0;
 }
 
-.detail-icon-button svg { width: 11px; height: 11px; stroke-width: 1.5; }
+.detail-icon-button:hover { background: #e9eaec; }
+.detail-icon-button svg { width: 12px; height: 12px; stroke-width: 1.5; }
+.detail-icon-button.is-danger { color: #f87171; }
 
 .detail-action-button {
   height: 28px;
@@ -418,6 +421,8 @@ button { cursor: pointer; }
 }
 
 .detail-action-button:hover { border-color: #0755a3; color: #0755a3; }
+.detail-action-button.is-danger { color: #f87171; }
+.detail-action-button.is-danger:hover { border-color: #d7d9dd; color: #ef4444; }
 
 .detail-bookmark-button {
   display: inline-grid;
@@ -534,4 +539,5 @@ button { cursor: pointer; }
   .first-login-modal__description { margin-top: 9px; font-size: 11px; }
   .first-login-form { margin-top: 22px; }
   .first-login-submit { margin-top: 30px; }
+  .profile-edit-submit { margin-top: 30px; }
 }

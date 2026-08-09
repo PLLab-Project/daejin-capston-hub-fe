@@ -8,6 +8,8 @@ const inputClassName = 'h-[30px] w-full rounded-[5px] border border-neutral-300 
 const labelClassName = 'mb-1.5 block text-[10px] font-semibold leading-none text-neutral-700 md:mb-2 md:text-[12px]'
 
 export interface ProjectRegistrationData {
+  studentId?: string
+  author?: string
   title: string
   summary: string
   category: ProjectCategory
@@ -17,15 +19,19 @@ export interface ProjectRegistrationData {
 }
 
 interface ProjectRegistrationPageProps {
+  mode?: 'create' | 'edit'
+  adminMode?: boolean
+  initialData?: ProjectRegistrationData
   onCancel: () => void
   onSubmit: (data: ProjectRegistrationData) => void
 }
 
-export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrationPageProps) {
+export function ProjectRegistrationPage({ mode = 'create', adminMode = false, initialData, onCancel, onSubmit }: ProjectRegistrationPageProps) {
   const categoryRef = useRef<HTMLDivElement>(null)
   const [categoryOpen, setCategoryOpen] = useState(false)
-  const [category, setCategory] = useState<ProjectCategory | ''>('')
-  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState<ProjectCategory | ''>(initialData?.category ?? '')
+  const [description, setDescription] = useState(initialData?.description ?? '')
+  const isEditing = mode === 'edit'
 
   useEffect(() => {
     const closeOnOutsideClick = (event: PointerEvent) => {
@@ -52,6 +58,8 @@ export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrat
 
     const formData = new FormData(event.currentTarget)
     onSubmit({
+      studentId: String(formData.get('studentId') ?? '').trim() || undefined,
+      author: String(formData.get('author') ?? '').trim() || undefined,
       title: String(formData.get('title') ?? '').trim(),
       summary: String(formData.get('summary') ?? '').trim(),
       category,
@@ -64,17 +72,23 @@ export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrat
   return (
     <main className="mx-auto w-[calc(100%-32px)] max-w-[768px] flex-1 pb-8 pt-4 md:pb-12 md:pt-6">
       <header className="border-b border-neutral-200 pb-3 md:pb-4">
-        <h1 className="text-[16px] font-bold leading-5 text-neutral-900 md:text-[20px] md:leading-6">작품 등록</h1>
-        <p className="mt-1 text-[10px] text-neutral-400 md:mt-1.5 md:text-[12px]">졸업작품 정보를 입력하고 파일을 업로드해 주세요.</p>
+        <h1 className="text-[16px] font-bold leading-5 text-neutral-900 md:text-[20px] md:leading-6">작품 {isEditing ? '수정' : '등록'}</h1>
+        <p className="mt-1 text-[10px] text-neutral-400 md:mt-1.5 md:text-[12px]">졸업작품 정보를 {isEditing ? '수정하고 필요한 파일을 변경해' : '입력하고 파일을 업로드해'} 주세요.</p>
       </header>
 
       <form className="mt-3 space-y-3 md:mt-4 md:space-y-4" onSubmit={submitForm}>
+        {adminMode && (
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
+            <RegistrationField label="학번 *"><input name="studentId" className={inputClassName} placeholder="학번을 입력하세요" required /></RegistrationField>
+            <RegistrationField label="이름 *"><input name="author" className={inputClassName} placeholder="이름을 입력하세요" required /></RegistrationField>
+          </div>
+        )}
         <RegistrationField label="작품명 *">
-          <input name="title" className={inputClassName} placeholder="작품 제목을 입력하세요" required />
+          <input name="title" className={inputClassName} placeholder="작품 제목을 입력하세요" defaultValue={initialData?.title} required />
         </RegistrationField>
 
         <RegistrationField label="요약 *">
-          <input name="summary" className={inputClassName} placeholder="50자 이내로 입력하세요" maxLength={50} required />
+          <input name="summary" className={inputClassName} placeholder="50자 이내로 입력하세요" defaultValue={initialData?.summary} maxLength={50} required />
         </RegistrationField>
 
         <div>
@@ -126,7 +140,7 @@ export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrat
           label="기술 스택 *"
           helper="(사용한 기술, 언어, 프레임워크 등)"
         >
-          <input name="techStack" className={inputClassName} placeholder="예) Python, TensorFlow, React, FastAPI" required />
+          <input name="techStack" className={inputClassName} placeholder="예) Python, TensorFlow, React, FastAPI" defaultValue={initialData?.techStack} required />
         </RegistrationField>
 
         <RegistrationField label="작품 설명 *">
@@ -145,7 +159,7 @@ export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrat
         </RegistrationField>
 
         <RegistrationField label="시연 영상 URL">
-          <input name="demoVideoUrl" type="url" className={inputClassName} placeholder="https://youtu.be/..." />
+          <input name="demoVideoUrl" type="url" className={inputClassName} placeholder="https://youtu.be/..." defaultValue={initialData?.demoVideoUrl} />
         </RegistrationField>
 
         <div className="grid gap-3 pt-0.5 md:grid-cols-2 md:gap-6 md:pt-0">
@@ -171,12 +185,12 @@ export function ProjectRegistrationPage({ onCancel, onSubmit }: ProjectRegistrat
 
         <aside className="rounded-[4px] bg-[#eef3ff] px-2.5 py-2 text-[8px] leading-[13px] text-brand md:px-4 md:py-3 md:text-[10px] md:leading-4">
           <strong className="block font-semibold">확인사항</strong>
-          <span>필수항목(*) 누락 시 등록이 불가합니다. 등록 후 [내 작품]에서 수정 가능합니다.</span>
+          <span>{isEditing ? '변경한 내용은 저장 후 작품 상세페이지에 바로 반영됩니다.' : '필수항목(*) 누락 시 등록이 불가합니다. 등록 후 [내 작품]에서 수정 가능합니다.'}</span>
         </aside>
 
         <div className="flex items-center justify-between pt-3 md:pt-0">
           <button type="button" className="h-[30px] w-[84px] rounded-[7px] border border-neutral-300 bg-white text-[10px] text-neutral-500 hover:border-neutral-400 md:h-[46px] md:w-[160px] md:text-[13px]" onClick={onCancel}>취소</button>
-          <button type="submit" className="h-[30px] w-[122px] rounded-[7px] bg-brand text-[10px] font-semibold text-white hover:bg-[#013f85] md:h-[46px] md:w-64 md:text-[13px]">등록 완료</button>
+          <button type="submit" className="h-[30px] w-[122px] rounded-[7px] bg-brand text-[10px] font-semibold text-white hover:bg-[#013f85] md:h-[46px] md:w-64 md:text-[13px]">{isEditing ? '수정 완료' : '등록 완료'}</button>
         </div>
       </form>
     </main>
