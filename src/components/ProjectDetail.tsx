@@ -9,6 +9,7 @@ type ViewerRole = 'guest' | 'owner' | 'admin'
 interface ProjectDetailProps {
   project: GalleryProject
   viewerRole?: ViewerRole
+  backLabel?: string
   onBack: () => void
   onBookmark: (id: number) => void
   onEdit?: (id: number) => void
@@ -31,6 +32,7 @@ function getCircularImageSequence(startImage: number, count: number) {
 export function ProjectDetail({
   project,
   viewerRole = 'guest',
+  backLabel = '갤러리',
   onBack,
   onBookmark,
   onEdit,
@@ -77,7 +79,7 @@ export function ProjectDetail({
     <>
       <main className="page-container flex-1 pb-10 pt-[10px] md:pb-12 md:pt-6">
       <div className="flex min-h-[21px] items-start border-neutral-200 text-[8px] text-neutral-400 md:border-b md:pb-3 md:text-[11px]">
-        <button type="button" className="hover:text-brand" onClick={onBack}>갤러리</button>
+        <button type="button" className="hover:text-brand" onClick={onBack}>{backLabel}</button>
         <ChevronRight className="mx-3 mt-px h-2.5 w-2.5 md:mt-[3px] md:h-3 md:w-3" aria-hidden="true" />
         <span className="min-w-0 truncate text-neutral-600">{project.title} 시스템</span>
 

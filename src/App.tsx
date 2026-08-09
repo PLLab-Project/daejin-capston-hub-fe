@@ -7,10 +7,16 @@ import { ProjectDetail } from './components/ProjectDetail'
 import { Footer } from './components/Footer'
 import { LoginModal } from './components/LoginModal'
 import { FirstLoginModal } from './components/FirstLoginModal'
+import { NoticePage } from './components/NoticePage'
+import { NoticeDetail } from './components/NoticeDetail'
+import { ProjectCollectionPage } from './components/ProjectCollectionPage'
+import { ProjectRegistrationPage, type ProjectRegistrationData } from './components/ProjectRegistrationPage'
 import { initialProjects } from './data/projects'
+import { initialNotices } from './data/notices'
 
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
+type CurrentPage = 'gallery' | 'notices' | 'register' | 'my-projects' | 'favorites'
 
 export default function App() {
   const [projects, setProjects] = useState(initialProjects)
@@ -19,9 +25,14 @@ export default function App() {
   const [authStep, setAuthStep] = useState<AuthStep>('closed')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [hasCompletedInitialProfile, setHasCompletedInitialProfile] = useState(false)
+  const [currentPage, setCurrentPage] = useState<CurrentPage>('gallery')
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+  const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const selectedProject = projects.find((project) => project.id === selectedProjectId)
+  const selectedNotice = initialNotices.find((notice) => notice.id === selectedNoticeId)
+  const myProjects = projects.filter((project) => project.owned)
+  const favoriteProjects = projects.filter((project) => project.bookmarked)
 
   const filteredProjects = useMemo(() => {
     const keyword = filters.search.trim().toLocaleLowerCase('ko-KR')
@@ -40,7 +51,38 @@ export default function App() {
 
   const toggleBookmark = (id: number) => setProjects((items) => items.map((item) => item.id === id ? { ...item, bookmarked: !item.bookmarked } : item))
   const showGallery = () => {
+    setCurrentPage('gallery')
     setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showNotices = () => {
+    setCurrentPage('notices')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showRegistration = () => {
+    setCurrentPage('register')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showMyProjects = () => {
+    setCurrentPage('my-projects')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showFavorites = () => {
+    setCurrentPage('favorites')
+    setSelectedProjectId(null)
+    setSelectedNoticeId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+  const showNotice = (id: number) => {
+    setCurrentPage('notices')
+    setSelectedNoticeId(id)
     window.scrollTo({ top: 0, behavior: 'auto' })
   }
   const showProject = (id: number) => {
@@ -48,25 +90,91 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }
 
+  const closeProject = () => {
+    setSelectedProjectId(null)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
+
+  const registerProject = (data: ProjectRegistrationData) => {
+    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '.')
+
+    setProjects((items) => [
+      ...items,
+      {
+        id: Math.max(0, ...items.map((project) => project.id)) + 1,
+        title: data.title,
+        description: data.summary,
+        detailSummary: data.summary,
+        field: data.category,
+        techStack: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+        longDescription: data.description,
+        demoVideoUrl: data.demoVideoUrl || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+        author: '홍길동',
+        date,
+        year: Number(date.slice(0, 4)),
+        category: data.category,
+        bookmarked: false,
+        owned: true,
+        approvalStatus: 'pending',
+      },
+    ])
+    showMyProjects()
+  }
+
+  const activeItem = currentPage === 'notices'
+    ? '공지사항'
+    : currentPage === 'register'
+      ? '작품 등록'
+    : currentPage === 'my-projects'
+      ? '내 작품'
+      : currentPage === 'favorites'
+        ? '즐겨찾기'
+        : '갤러리'
+
   return (
     <div id="top" className="flex min-h-screen flex-col bg-white text-neutral-800">
       <Header
         menuOpen={menuOpen}
         isLoggedIn={isLoggedIn}
+        activeItem={activeItem}
         onMenuToggle={() => setMenuOpen((open) => !open)}
         onGalleryClick={showGallery}
+        onNoticeClick={showNotices}
+        onRegisterClick={showRegistration}
+        onMyProjectsClick={showMyProjects}
+        onFavoritesClick={showFavorites}
         onLoginClick={() => setAuthStep('login')}
         onLogoutClick={() => {
           setIsLoggedIn(false)
           setAuthStep('closed')
         }}
       />
-      {selectedProject ? (
+      {currentPage === 'notices' ? (
+        selectedNotice ? <NoticeDetail notice={selectedNotice} onBack={showNotices} /> : <NoticePage onOpen={showNotice} />
+      ) : currentPage === 'register' ? (
+        <ProjectRegistrationPage onCancel={showGallery} onSubmit={registerProject} />
+      ) : selectedProject ? (
         <ProjectDetail
           key={selectedProject.id}
           project={selectedProject}
-          onBack={showGallery}
+          backLabel={currentPage === 'favorites' ? '즐겨찾기' : currentPage === 'my-projects' ? '내 작품' : '갤러리'}
+          onBack={closeProject}
           onBookmark={toggleBookmark}
+        />
+      ) : currentPage === 'my-projects' ? (
+        <ProjectCollectionPage
+          projects={myProjects}
+          emptyMessage="등록한 작품이 없습니다."
+          groupByApprovalStatus
+          onBookmark={toggleBookmark}
+          onOpen={showProject}
+        />
+      ) : currentPage === 'favorites' ? (
+        <ProjectCollectionPage
+          projects={favoriteProjects}
+          emptyMessage="즐겨찾기한 작품이 없습니다."
+          onBookmark={toggleBookmark}
+          onOpen={showProject}
         />
       ) : (
         <main className="page-container flex-1">

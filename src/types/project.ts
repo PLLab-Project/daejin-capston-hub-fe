@@ -1,4 +1,5 @@
-export type ProjectCategory = '웹' | '앱' | '게임' | '임베디드'
+export type ProjectCategory = '웹' | '앱' | '게임' | '임베디드' | '보안'
+export type ProjectApprovalStatus = 'approved' | 'pending' | 'rejected'
 
 export interface GalleryProject {
   id: number
@@ -14,4 +15,6 @@ export interface GalleryProject {
   year: number
   category: ProjectCategory
   bookmarked: boolean
+  owned: boolean
+  approvalStatus: ProjectApprovalStatus
 }

@@ -18,4 +18,6 @@ export const initialProjects: GalleryProject[] = Array.from({ length: 12 }, (_, 
   year: 2026,
   category: '웹',
   bookmarked: index === 0 || index === 4,
+  owned: index === 1 || index === 2,
+  approvalStatus: index === 2 ? 'pending' : index === 3 ? 'rejected' : 'approved',
 }))
