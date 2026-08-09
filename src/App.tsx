@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Header } from './components/Header'
 import { Filters, type FilterState } from './components/Filters'
 import { ProjectCard } from './components/ProjectCard'
@@ -14,12 +13,23 @@ import { ProjectRegistrationPage, type ProjectRegistrationData } from './compone
 import { MyPage, type UserProfile } from './components/MyPage'
 import { ConfirmModal } from './components/ConfirmModal'
 import { AdminPage, type AdminNoticeData } from './components/AdminPage'
+import { Pagination } from './components/Pagination'
+import { StatusModal } from './components/StatusModal'
 import { initialProjects } from './data/projects'
 import { initialNotices } from './data/notices'
+import { navigateHash, noticeHash, pageHash, projectHash, readHashRoute, type AppPage, type ProjectSourcePage } from './utils/hashRoute'
 
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
-type CurrentPage = 'gallery' | 'notices' | 'register' | 'my-projects' | 'favorites' | 'my-page' | 'admin'
+const homePageSize = 12
+const initialRoute = typeof window === 'undefined'
+  ? { page: 'gallery' as AppPage, projectId: null, noticeId: null, editingProjectId: null }
+  : readHashRoute()
+
+interface FeedbackMessage {
+  title: string
+  description?: string
+}
 
 const initialProfile: UserProfile = {
   name: '김민정',
@@ -35,14 +45,15 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [hasCompletedInitialProfile, setHasCompletedInitialProfile] = useState(false)
-  const [currentPage, setCurrentPage] = useState<CurrentPage>('gallery')
+  const [currentPage, setCurrentPage] = useState<AppPage>(initialRoute.page)
   const [profile, setProfile] = useState<UserProfile>(initialProfile)
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
-  const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(null)
-  const [editingProjectId, setEditingProjectId] = useState<number | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialRoute.projectId)
+  const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(initialRoute.noticeId)
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(initialRoute.editingProjectId)
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
   const [notices, setNotices] = useState(initialNotices)
   const [page, setPage] = useState(1)
+  const [feedback, setFeedback] = useState<FeedbackMessage | null>(null)
   const selectedProject = projects.find((project) => project.id === selectedProjectId)
   const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId)
   const editingProject = projects.find((project) => project.id === editingProjectId)
@@ -58,68 +69,62 @@ export default function App() {
     )
     return [...result].sort((a, b) => filters.sort === '이름순' ? a.title.localeCompare(b.title, 'ko-KR') : b.date.localeCompare(a.date))
   }, [filters, projects])
+  const homeTotalPages = Math.max(1, Math.ceil(filteredProjects.length / homePageSize))
+  const currentHomePage = Math.min(page, homeTotalPages)
+  const paginatedProjects = filteredProjects.slice((currentHomePage - 1) * homePageSize, currentHomePage * homePageSize)
 
   const updateFilters = (next: FilterState) => {
     setFilters(next)
     setPage(1)
   }
 
+  const syncRoute = useCallback(() => {
+    const route = readHashRoute()
+    setCurrentPage(route.page)
+    setSelectedProjectId(route.projectId)
+    setSelectedNoticeId(route.noticeId)
+    setEditingProjectId(route.editingProjectId)
+    setMenuOpen(false)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [])
+
+  useEffect(() => {
+    if (!window.location.hash || window.location.hash === '#top') {
+      window.history.replaceState(null, '', pageHash('gallery'))
+    }
+    window.addEventListener('hashchange', syncRoute)
+    return () => window.removeEventListener('hashchange', syncRoute)
+  }, [syncRoute])
+
+  const navigateTo = useCallback((hash: string, replace = false) => {
+    if (window.location.hash === hash) {
+      syncRoute()
+      return
+    }
+    navigateHash(hash, replace)
+  }, [syncRoute])
+
   const toggleBookmark = (id: number) => setProjects((items) => items.map((item) => item.id === id ? { ...item, bookmarked: !item.bookmarked } : item))
-  const showGallery = () => {
-    setCurrentPage('gallery')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showNotices = () => {
-    setCurrentPage('notices')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showRegistration = () => {
-    setCurrentPage('register')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showMyProjects = () => {
-    setCurrentPage('my-projects')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showFavorites = () => {
-    setCurrentPage('favorites')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showMyPage = () => {
-    setCurrentPage('my-page')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showAdmin = () => {
-    setCurrentPage('admin')
-    setSelectedProjectId(null)
-    setSelectedNoticeId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
-  const showNotice = (id: number) => {
-    setCurrentPage('notices')
-    setSelectedNoticeId(id)
-    window.scrollTo({ top: 0, behavior: 'auto' })
-  }
+  const showGallery = () => navigateTo(pageHash('gallery'))
+  const showNotices = () => navigateTo(pageHash('notices'))
+  const showRegistration = () => navigateTo(pageHash('register'))
+  const showMyProjects = () => navigateTo(pageHash('my-projects'))
+  const showFavorites = () => navigateTo(pageHash('favorites'))
+  const showMyPage = () => navigateTo(pageHash('my-page'))
+  const showAdmin = () => navigateTo(pageHash('admin'))
+  const showNotice = (id: number) => navigateTo(noticeHash(id))
   const showProject = (id: number) => {
-    setSelectedProjectId(id)
-    window.scrollTo({ top: 0, behavior: 'auto' })
+    const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
+    navigateTo(projectHash(id, source))
   }
 
   const closeProject = () => {
-    setSelectedProjectId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
+    navigateTo(pageHash(currentPage))
+  }
+
+  const startEditingProject = (id: number) => {
+    const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
+    navigateTo(projectHash(id, source, true))
   }
 
   const registerProject = (data: ProjectRegistrationData) => {
@@ -145,13 +150,18 @@ export default function App() {
         approvalStatus: 'pending',
       },
     ])
+    setFeedback({
+      title: '작품 등록이 완료되었습니다.',
+      description: '등록한 작품은 내 작품에서 확인할 수 있으며 관리자 승인 후 갤러리에 공개됩니다.',
+    })
     showMyProjects()
   }
 
   const updateProject = (data: ProjectRegistrationData) => {
     if (editingProjectId === null) return
+    const updatedProjectId = editingProjectId
 
-    setProjects((items) => items.map((project) => project.id === editingProjectId ? {
+    setProjects((items) => items.map((project) => project.id === updatedProjectId ? {
       ...project,
       title: data.title,
       description: data.summary,
@@ -162,14 +172,15 @@ export default function App() {
       longDescription: data.description,
       demoVideoUrl: data.demoVideoUrl || project.demoVideoUrl,
     } : project))
-    setEditingProjectId(null)
+    setFeedback({ title: '작품 수정이 완료되었습니다.', description: '변경한 내용이 작품 상세정보에 반영되었습니다.' })
+    const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
+    navigateTo(projectHash(updatedProjectId, source))
   }
 
   const deleteProject = (id: number) => {
     setProjects((items) => items.filter((project) => project.id !== id))
-    setSelectedProjectId(null)
     setPendingDeleteProjectId(null)
-    window.scrollTo({ top: 0, behavior: 'auto' })
+    navigateTo(pageHash(currentPage))
   }
 
   const setProjectApproval = (id: number, approvalStatus: 'approved' | 'rejected') => {
@@ -179,11 +190,13 @@ export default function App() {
   const saveNotice = (id: number | null, data: AdminNoticeData) => {
     if (id !== null) {
       setNotices((items) => items.map((notice) => notice.id === id ? { ...notice, ...data } : notice))
+      setFeedback({ title: '공지 수정이 완료되었습니다.', description: '변경한 내용이 공지사항에 반영되었습니다.' })
       return
     }
 
     const date = new Date().toISOString().slice(0, 10).replaceAll('-', '.')
     setNotices((items) => [{ id: Math.max(0, ...items.map((notice) => notice.id)) + 1, date, ...data }, ...items])
+    setFeedback({ title: '공지 등록이 완료되었습니다.', description: '새 공지사항이 목록에 추가되었습니다.' })
   }
 
   const activeItem = currentPage === 'notices'
@@ -235,7 +248,10 @@ export default function App() {
             description: editingProject.longDescription,
             demoVideoUrl: editingProject.demoVideoUrl,
           }}
-          onCancel={() => setEditingProjectId(null)}
+          onCancel={() => {
+            const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
+            navigateTo(projectHash(editingProject.id, source))
+          }}
           onSubmit={updateProject}
         />
       ) : currentPage === 'notices' ? (
@@ -256,7 +272,10 @@ export default function App() {
           profile={profile}
           myProjects={myProjects}
           favoriteProjects={favoriteProjects}
-          onProfileChange={setProfile}
+          onProfileChange={(nextProfile) => {
+            setProfile(nextProfile)
+            setFeedback({ title: '정보 수정이 완료되었습니다.', description: '변경한 회원 정보가 마이페이지에 반영되었습니다.' })
+          }}
           onMyProjectsClick={showMyProjects}
           onFavoritesClick={showFavorites}
         />
@@ -268,7 +287,7 @@ export default function App() {
           backLabel={currentPage === 'favorites' ? '즐겨찾기' : currentPage === 'my-projects' ? '내 작품' : '갤러리'}
           onBack={closeProject}
           onBookmark={toggleBookmark}
-          onEdit={setEditingProjectId}
+          onEdit={startEditingProject}
           onDelete={setPendingDeleteProjectId}
         />
       ) : currentPage === 'my-projects' ? (
@@ -292,7 +311,7 @@ export default function App() {
 
           {filteredProjects.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-x-10 md:gap-y-[37px] lg:grid-cols-4">
-              {filteredProjects.map((project) => <ProjectCard key={project.id} project={project} onBookmark={toggleBookmark} onOpen={showProject} />)}
+              {paginatedProjects.map((project) => <ProjectCard key={project.id} project={project} onBookmark={toggleBookmark} onOpen={showProject} />)}
             </div>
           ) : (
             <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
@@ -303,12 +322,16 @@ export default function App() {
           )}
 
           {filteredProjects.length > 0 && (
-            <nav className="mb-10 mt-10 flex items-center justify-center gap-5 text-[11px] text-neutral-400 md:mb-0 md:mt-[57px] md:gap-6 md:text-[13px]" aria-label="페이지 이동">
-              <button aria-label="이전 페이지" type="button" onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={13} /></button>
-              {[1, 2, 3].map((number) => <button key={number} type="button" onClick={() => setPage(number)} className={`flex h-5 min-w-[14px] items-center justify-center border-b-2 px-1 leading-none ${page === number ? 'border-brand font-semibold text-brand' : 'border-transparent'}`}>{number}</button>)}
-              <span>…</span><button type="button" onClick={() => setPage(21)} className={`flex h-5 min-w-[18px] items-center justify-center border-b-2 px-1 leading-none ${page === 21 ? 'border-brand font-semibold text-brand' : 'border-transparent'}`}>21</button>
-              <button aria-label="다음 페이지" type="button" onClick={() => setPage((value) => Math.min(21, value + 1))}><ChevronRight size={13} /></button>
-            </nav>
+            <Pagination
+              page={currentHomePage}
+              totalPages={homeTotalPages}
+              onChange={(nextPage) => {
+                setPage(nextPage)
+                window.scrollTo({ top: 0, behavior: 'auto' })
+              }}
+              ariaLabel="페이지 이동"
+              className="mb-10 mt-10 md:mb-0 md:mt-[57px]"
+            />
           )}
         </main>
       )}
@@ -345,6 +368,7 @@ export default function App() {
           setHasCompletedInitialProfile(true)
           setIsLoggedIn(true)
           setAuthStep('closed')
+          setFeedback({ title: '정보 등록이 완료되었습니다.', description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.' })
         }}
       />
       <ConfirmModal
@@ -356,6 +380,12 @@ export default function App() {
         onConfirm={() => {
           if (pendingDeleteProjectId !== null) deleteProject(pendingDeleteProjectId)
         }}
+      />
+      <StatusModal
+        open={feedback !== null}
+        title={feedback?.title ?? ''}
+        description={feedback?.description}
+        onClose={() => setFeedback(null)}
       />
     </div>
   )

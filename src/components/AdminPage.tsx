@@ -1,10 +1,12 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ChevronDown, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Notice } from '../types/notice'
 import type { GalleryProject } from '../types/project'
+import { navigateHash } from '../utils/hashRoute'
 import { ConfirmModal } from './ConfirmModal'
 import { NoticeDetail } from './NoticeDetail'
+import { Pagination } from './Pagination'
 import { ProjectDetail } from './ProjectDetail'
 
 type AdminTab = 'projects' | 'members' | 'notices'
@@ -46,6 +48,44 @@ const tabItems: Array<{ id: AdminTab; label: string }> = [
   { id: 'notices', label: '공지 관리' },
 ]
 
+const pageSize = 12
+
+interface AdminRouteState {
+  tab: AdminTab
+  projectId: number | null
+  noticeId: number | null
+  noticeEditor: number | 'new' | null
+}
+
+function adminHash(tab: AdminTab) {
+  return `#/admin?tab=${tab}`
+}
+
+function readAdminRoute(): AdminRouteState {
+  const normalized = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : ''
+  const [path, queryString = ''] = normalized.split('?')
+  const segments = path.split('/').filter(Boolean)
+  const queryTab = new URLSearchParams(queryString).get('tab')
+  const requestedTab: AdminTab = queryTab === 'members' || queryTab === 'notices' ? queryTab : 'projects'
+
+  if (segments[0] !== 'admin') return { tab: requestedTab, projectId: null, noticeId: null, noticeEditor: null }
+  if (segments[1] === 'projects') {
+    const projectId = Number(segments[2])
+    return { tab: 'projects', projectId: Number.isInteger(projectId) && projectId > 0 ? projectId : null, noticeId: null, noticeEditor: null }
+  }
+  if (segments[1] === 'notices') {
+    if (segments[2] === 'new') return { tab: 'notices', projectId: null, noticeId: null, noticeEditor: 'new' }
+    const noticeId = Number(segments[2])
+    if (Number.isInteger(noticeId) && noticeId > 0) {
+      return segments[3] === 'edit'
+        ? { tab: 'notices', projectId: null, noticeId: null, noticeEditor: noticeId }
+        : { tab: 'notices', projectId: null, noticeId, noticeEditor: null }
+    }
+  }
+
+  return { tab: requestedTab, projectId: null, noticeId: null, noticeEditor: null }
+}
+
 export function AdminPage({
   projects,
   notices,
@@ -54,16 +94,38 @@ export function AdminPage({
   onSaveNotice,
   onDeleteNotice,
 }: AdminPageProps) {
-  const [activeTab, setActiveTab] = useState<AdminTab>('projects')
+  const initialAdminRoute = readAdminRoute()
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialAdminRoute.tab)
   const [searchDraft, setSearchDraft] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [reviewProjectId, setReviewProjectId] = useState<number | null>(null)
-  const [noticeEditor, setNoticeEditor] = useState<Notice | 'new' | null>(null)
-  const [viewNoticeId, setViewNoticeId] = useState<number | null>(null)
+  const [reviewProjectId, setReviewProjectId] = useState<number | null>(initialAdminRoute.projectId)
+  const [noticeEditorId, setNoticeEditorId] = useState<number | 'new' | null>(initialAdminRoute.noticeEditor)
+  const [viewNoticeId, setViewNoticeId] = useState<number | null>(initialAdminRoute.noticeId)
   const [pendingDeleteNoticeId, setPendingDeleteNoticeId] = useState<number | null>(null)
+  const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState<number | null>(null)
+  const [pendingRejectProjectId, setPendingRejectProjectId] = useState<number | null>(null)
   const [memberItems, setMemberItems] = useState(initialMembers)
+  const [page, setPage] = useState(1)
   const reviewProject = projects.find((project) => project.id === reviewProjectId)
   const viewNotice = notices.find((notice) => notice.id === viewNoticeId)
+  const noticeEditor = noticeEditorId === 'new' ? 'new' : notices.find((notice) => notice.id === noticeEditorId) ?? null
+
+  useEffect(() => {
+    const syncAdminRoute = () => {
+      const route = readAdminRoute()
+      setActiveTab(route.tab)
+      setReviewProjectId(route.projectId)
+      setViewNoticeId(route.noticeId)
+      setNoticeEditorId(route.noticeEditor)
+      setSearchDraft('')
+      setSearchKeyword('')
+      setPage(1)
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    }
+
+    window.addEventListener('hashchange', syncAdminRoute)
+    return () => window.removeEventListener('hashchange', syncAdminRoute)
+  }, [])
 
   const filteredProjects = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
@@ -80,24 +142,43 @@ export function AdminPage({
     return keyword ? notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword)) : notices
   }, [notices, searchKeyword])
 
+  const activeItemCount = activeTab === 'projects' ? filteredProjects.length : activeTab === 'members' ? filteredMembers.length : filteredNotices.length
+  const totalPages = Math.max(1, Math.ceil(activeItemCount / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const paginatedProjects = filteredProjects.slice(pageStart, pageStart + pageSize)
+  const paginatedMembers = filteredMembers.slice(pageStart, pageStart + pageSize)
+  const paginatedNotices = filteredNotices.slice(pageStart, pageStart + pageSize)
+
   if (reviewProject) {
     return (
-      <ProjectDetail
-        project={reviewProject}
-        viewerRole="admin"
-        reviewMode
-        backLabel="작품 관리"
-        onBack={() => setReviewProjectId(null)}
-        onBookmark={() => undefined}
-        onApprove={(id) => {
-          onApproveProject(id)
-          setReviewProjectId(null)
-        }}
-        onReject={(id) => {
-          onRejectProject(id)
-          setReviewProjectId(null)
-        }}
-      />
+      <>
+        <ProjectDetail
+          project={reviewProject}
+          viewerRole="admin"
+          reviewMode
+          backLabel="작품 관리"
+          onBack={() => navigateHash(adminHash('projects'))}
+          onBookmark={() => undefined}
+          onApprove={(id) => {
+            onApproveProject(id)
+            navigateHash(adminHash('projects'))
+          }}
+          onReject={setPendingRejectProjectId}
+        />
+        <ConfirmModal
+          open={pendingRejectProjectId !== null}
+          title="작품 승인을 반려하시겠습니까?"
+          description="반려된 작품은 내 작품에서 승인 거부 상태로 표시됩니다."
+          confirmLabel="반려"
+          onCancel={() => setPendingRejectProjectId(null)}
+          onConfirm={() => {
+            if (pendingRejectProjectId !== null) onRejectProject(pendingRejectProjectId)
+            setPendingRejectProjectId(null)
+            navigateHash(adminHash('projects'))
+          }}
+        />
+      </>
     )
   }
 
@@ -105,23 +186,21 @@ export function AdminPage({
     return (
       <AdminNoticeEditor
         initialNotice={noticeEditor === 'new' ? undefined : noticeEditor}
-        onCancel={() => setNoticeEditor(null)}
+        onCancel={() => navigateHash(adminHash('notices'))}
         onSubmit={(data) => {
           onSaveNotice(noticeEditor === 'new' ? null : noticeEditor.id, data)
-          setNoticeEditor(null)
+          navigateHash(adminHash('notices'))
         }}
       />
     )
   }
 
   if (viewNotice) {
-    return <NoticeDetail notice={viewNotice} backLabel="공지 관리" onBack={() => setViewNoticeId(null)} />
+    return <NoticeDetail notice={viewNotice} backLabel="공지 관리" onBack={() => navigateHash(adminHash('notices'))} />
   }
 
   const changeTab = (tab: AdminTab) => {
-    setActiveTab(tab)
-    setSearchDraft('')
-    setSearchKeyword('')
+    navigateHash(adminHash(tab))
   }
 
   const searchPlaceholder = activeTab === 'members' ? '이름, 학번으로 검색' : '제목으로 검색'
@@ -136,6 +215,7 @@ export function AdminPage({
             onSubmit={(event) => {
               event.preventDefault()
               setSearchKeyword(searchDraft.trim())
+              setPage(1)
             }}
           >
             <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} className="block h-full w-full rounded-full bg-[#f0f0f0] px-3 pr-8 text-[9px] outline-none placeholder:text-neutral-400 md:px-4 md:pr-10 md:text-[11px]" placeholder={searchPlaceholder} aria-label={searchPlaceholder} />
@@ -144,7 +224,7 @@ export function AdminPage({
 
           <div className="my-3 flex items-center gap-3 md:my-0 md:gap-6">
             {activeTab === 'notices' && (
-              <button type="button" className="h-[26px] w-[92px] rounded-full border border-neutral-300 text-[9px] text-neutral-600 hover:border-brand hover:text-brand md:h-[30px] md:w-[112px] md:text-[11px]" onClick={() => setNoticeEditor('new')}>공지 등록</button>
+              <button type="button" className="h-[26px] w-[92px] rounded-full border border-neutral-300 text-[9px] text-neutral-600 hover:border-brand hover:text-brand md:h-[30px] md:w-[112px] md:text-[11px]" onClick={() => navigateHash('#/admin/notices/new')}>공지 등록</button>
             )}
             <div className="grid h-[26px] flex-1 grid-cols-3 overflow-hidden rounded-full bg-[#f0f0f0] md:h-[30px] md:w-[336px] md:flex-none">
               {tabItems.map((tab) => (
@@ -155,25 +235,25 @@ export function AdminPage({
         </div>
 
         <div className="md:mt-[15px]">
-          {activeTab === 'projects' && <ProjectManagementTable projects={filteredProjects} onOpen={setReviewProjectId} />}
+          {activeTab === 'projects' && <ProjectManagementTable projects={paginatedProjects} onOpen={(id) => navigateHash(`#/admin/projects/${id}`)} />}
           {activeTab === 'members' && (
             <MemberManagementTable
-              memberItems={filteredMembers}
+              memberItems={paginatedMembers}
               onRoleChange={(id, role) => setMemberItems((items) => items.map((member) => member.id === id ? { ...member, role } : member))}
-              onDelete={(id) => setMemberItems((items) => items.filter((member) => member.id !== id))}
+              onDelete={setPendingDeleteMemberId}
             />
           )}
           {activeTab === 'notices' && (
             <NoticeManagementTable
-              notices={filteredNotices}
-              onOpen={setViewNoticeId}
-              onEdit={setNoticeEditor}
+              notices={paginatedNotices}
+              onOpen={(id) => navigateHash(`#/admin/notices/${id}`)}
+              onEdit={(notice) => navigateHash(`#/admin/notices/${notice.id}/edit`)}
               onDelete={setPendingDeleteNoticeId}
             />
           )}
         </div>
 
-        <AdminPagination />
+        <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="관리자 목록 페이지 이동" className="mb-10 mt-auto pt-10 md:mb-0" />
       </main>
 
       <ConfirmModal
@@ -185,6 +265,17 @@ export function AdminPage({
         onConfirm={() => {
           if (pendingDeleteNoticeId !== null) onDeleteNotice(pendingDeleteNoticeId)
           setPendingDeleteNoticeId(null)
+        }}
+      />
+      <ConfirmModal
+        open={pendingDeleteMemberId !== null}
+        title="회원을 삭제하시겠습니까?"
+        description="삭제한 회원 정보는 복구할 수 없습니다."
+        confirmLabel="삭제"
+        onCancel={() => setPendingDeleteMemberId(null)}
+        onConfirm={() => {
+          if (pendingDeleteMemberId !== null) setMemberItems((items) => items.filter((member) => member.id !== pendingDeleteMemberId))
+          setPendingDeleteMemberId(null)
         }}
       />
     </>
@@ -250,16 +341,6 @@ function NoticeManagementTable({ notices, onOpen, onEdit, onDelete }: { notices:
 
 function EmptyRow() {
   return <div className="flex h-20 items-center justify-center border-b border-neutral-200 text-[10px] text-neutral-400 md:text-[12px]">검색 결과가 없습니다.</div>
-}
-
-function AdminPagination() {
-  return (
-    <nav className="mb-10 mt-auto flex h-5 items-center justify-center gap-5 pt-10 text-[10px] text-neutral-400 md:mb-0 md:gap-6 md:text-[12px]" aria-label="관리자 목록 페이지 이동">
-      <button type="button" aria-label="이전 페이지" disabled><ChevronLeft className="h-3 w-3" /></button>
-      <button type="button" className="flex h-5 min-w-[14px] items-center justify-center border-b-2 border-brand px-1 font-semibold leading-none text-brand">1</button>
-      <button type="button" aria-label="다음 페이지" disabled><ChevronRight className="h-3 w-3" /></button>
-    </nav>
-  )
 }
 
 function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotice?: Notice; onCancel: () => void; onSubmit: (data: AdminNoticeData) => void }) {

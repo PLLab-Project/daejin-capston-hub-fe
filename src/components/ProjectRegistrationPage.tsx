@@ -229,6 +229,7 @@ function ImageUploadField({
   const previewsRef = useRef<ImagePreview[]>([])
   const [previews, setPreviews] = useState<ImagePreview[]>([])
   const [dragging, setDragging] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const maxFiles = mode === 'additional' ? 5 : 1
 
   useEffect(() => {
@@ -240,17 +241,26 @@ function ImageUploadField({
   }, [])
 
   const addImages = (files: FileList | File[]) => {
-    const validFiles = Array.from(files).filter((file) =>
+    const selectedFiles = Array.from(files)
+    const hasInvalidType = selectedFiles.some((file) => !['image/jpeg', 'image/png'].includes(file.type))
+    const hasOversizedFile = selectedFiles.some((file) => file.size > 10 * 1024 * 1024)
+    const validFiles = selectedFiles.filter((file) =>
       ['image/jpeg', 'image/png'].includes(file.type) && file.size <= 10 * 1024 * 1024,
     )
+
+    if (hasInvalidType) setErrorMessage('JPG 또는 PNG 파일만 업로드할 수 있습니다.')
+    else if (hasOversizedFile) setErrorMessage('이미지는 파일당 10MB 이하만 업로드할 수 있습니다.')
+    else if (mode === 'additional' && validFiles.length > Math.max(0, maxFiles - previews.length)) setErrorMessage('추가 이미지는 최대 5장까지 업로드할 수 있습니다.')
+    else setErrorMessage('')
 
     setPreviews((current) => {
       const currentFileKeys = new Set(current.map((preview) => preview.id.split('--')[0]))
       const uniqueFiles = mode === 'representative'
         ? validFiles
         : validFiles.filter((file) => !currentFileKeys.has(`${file.name}-${file.size}-${file.lastModified}`))
-      const selectedFiles = uniqueFiles.slice(0, mode === 'representative' ? 1 : Math.max(0, maxFiles - current.length))
-      const nextPreviews = selectedFiles.map((file, index) => {
+      const availableCount = mode === 'representative' ? 1 : Math.max(0, maxFiles - current.length)
+      const acceptedFiles = uniqueFiles.slice(0, availableCount)
+      const nextPreviews = acceptedFiles.map((file, index) => {
         const fileKey = `${file.name}-${file.size}-${file.lastModified}`
         return {
           id: `${fileKey}--${Date.now()}-${index}`,
@@ -373,6 +383,7 @@ function ImageUploadField({
           )}
         </div>
       )}
+      {errorMessage && <p className="mt-1 text-[8px] leading-3 text-red-500 md:text-[10px] md:leading-4" role="alert">{errorMessage}</p>}
     </div>
   )
 }
@@ -392,6 +403,7 @@ function FileUploadField({
   const inputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const isArchive = accept.includes('.zip')
   const maxFileSize = (isArchive ? 100 : 50) * 1024 * 1024
   const FileIcon = isArchive ? Archive : FileText
@@ -399,8 +411,19 @@ function FileUploadField({
 
   const selectFiles = (files: FileList | File[]) => {
     const file = Array.from(files)[0]
+    if (!file) return
     const fileExtension = file ? `.${file.name.split('.').pop()?.toLowerCase()}` : ''
-    if (file && acceptedExtensions.includes(fileExtension) && file.size <= maxFileSize) setSelectedFile(file)
+    if (!acceptedExtensions.includes(fileExtension)) {
+      setErrorMessage(`${accept.replaceAll('.', '').toUpperCase().replaceAll(',', ', ')} 파일만 업로드할 수 있습니다.`)
+      return
+    }
+    if (file.size > maxFileSize) {
+      setErrorMessage(`${isArchive ? '압축파일은 100MB' : '보고서는 50MB'} 이하만 업로드할 수 있습니다.`)
+      return
+    }
+
+    setSelectedFile(file)
+    setErrorMessage('')
   }
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -435,7 +458,7 @@ function FileUploadField({
             <FileIcon className="mr-1.5 h-3 w-3 flex-none text-brand md:h-3.5 md:w-3.5" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-neutral-600" title={selectedFile.name}>{selectedFile.name}</span>
             <button type="button" className="ml-2 flex-none text-[8px] text-brand hover:underline md:text-[9px]" onClick={() => inputRef.current?.click()}>변경</button>
-            <button type="button" className="ml-1.5 grid h-4 w-4 flex-none place-items-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600" aria-label={`${selectedFile.name} 삭제`} onClick={() => setSelectedFile(null)}>
+            <button type="button" className="ml-1.5 grid h-4 w-4 flex-none place-items-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600" aria-label={`${selectedFile.name} 삭제`} onClick={() => { setSelectedFile(null); setErrorMessage('') }}>
               <X className="h-2.5 w-2.5" aria-hidden="true" />
             </button>
           </>
@@ -443,6 +466,7 @@ function FileUploadField({
           <button type="button" className="flex h-full w-full items-center justify-center text-neutral-300" onClick={() => inputRef.current?.click()}>{hint}</button>
         )}
       </div>
+      {errorMessage && <p className="mt-1 text-[8px] leading-3 text-red-500 md:text-[10px] md:leading-4" role="alert">{errorMessage}</p>}
     </div>
   )
 }

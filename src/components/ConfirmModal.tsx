@@ -54,8 +54,8 @@ export function ConfirmModal({
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-2.5 md:mt-8 md:gap-3">
-          <button ref={cancelRef} type="button" className="h-9 rounded-[7px] border border-neutral-300 bg-white text-[11px] text-neutral-500 hover:border-neutral-400 md:h-11 md:text-[13px]" onClick={onCancel}>취소</button>
           <button type="button" className="h-9 rounded-[7px] bg-red-500 text-[11px] font-semibold text-white hover:bg-red-600 md:h-11 md:text-[13px]" onClick={onConfirm}>{confirmLabel}</button>
+          <button ref={cancelRef} type="button" className="h-9 rounded-[7px] border border-neutral-300 bg-white text-[11px] text-neutral-500 hover:border-neutral-400 md:h-11 md:text-[13px]" onClick={onCancel}>취소</button>
         </div>
       </section>
     </div>

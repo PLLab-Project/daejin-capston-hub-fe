@@ -1,6 +1,9 @@
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { Notice } from '../types/notice'
+import { Pagination } from './Pagination'
+
+const pageSize = 12
 
 interface NoticePageProps {
   notices: Notice[]
@@ -10,6 +13,7 @@ interface NoticePageProps {
 export function NoticePage({ notices, onOpen }: NoticePageProps) {
   const [searchDraft, setSearchDraft] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [page, setPage] = useState(1)
 
   const filteredNotices = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
@@ -17,7 +21,14 @@ export function NoticePage({ notices, onOpen }: NoticePageProps) {
     return notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword))
   }, [notices, searchKeyword])
 
-  const submitSearch = () => setSearchKeyword(searchDraft.trim())
+  const totalPages = Math.max(1, Math.ceil(filteredNotices.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const paginatedNotices = filteredNotices.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  const submitSearch = () => {
+    setSearchKeyword(searchDraft.trim())
+    setPage(1)
+  }
 
   return (
     <main className="page-container flex flex-1 flex-col pt-3 md:pt-[17px]">
@@ -54,7 +65,7 @@ export function NoticePage({ notices, onOpen }: NoticePageProps) {
             </tr>
           </thead>
           <tbody>
-            {filteredNotices.map((notice) => (
+            {paginatedNotices.map((notice) => (
               <tr key={notice.id} className="h-[25px] border-b border-neutral-200 text-[10px] text-neutral-700 transition-colors hover:bg-neutral-50 md:h-[32px] md:text-[12px]">
                 <td className="truncate px-2.5 md:px-5">
                   <button type="button" className="block w-full truncate text-left hover:text-brand hover:underline" onClick={() => onOpen(notice.id)}>
@@ -73,15 +84,7 @@ export function NoticePage({ notices, onOpen }: NoticePageProps) {
         </table>
       </div>
 
-      <nav className="mb-[43px] mt-auto flex h-5 items-center justify-center gap-5 text-[10px] text-neutral-400 md:mb-0 md:gap-6 md:text-[12px]" aria-label="공지사항 페이지 이동">
-        <button type="button" aria-label="이전 페이지" className="grid h-5 w-4 place-items-center" disabled>
-          <ChevronLeft className="h-2.5 w-2.5 md:h-3 md:w-3" aria-hidden="true" />
-        </button>
-        <button type="button" aria-current="page" className="flex h-5 min-w-[14px] items-center justify-center border-b-2 border-brand px-1 font-semibold leading-none text-brand">1</button>
-        <button type="button" aria-label="다음 페이지" className="grid h-5 w-4 place-items-center" disabled>
-          <ChevronRight className="h-2.5 w-2.5 md:h-3 md:w-3" aria-hidden="true" />
-        </button>
-      </nav>
+      <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="공지사항 페이지 이동" className="mb-[43px] mt-auto md:mb-0" />
     </main>
   )
 }

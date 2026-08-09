@@ -151,7 +151,7 @@ export function Filters({ filters, resultCount, onChange }: FiltersProps) {
 
           {filters.category.map((category) => <SelectedFilterChip key={`category-${category}`} label={category} onRemove={() => toggleCategory(category)} />)}
           {filters.year.map((year) => <SelectedFilterChip key={`year-${year}`} label={year} onRemove={() => toggleYear(year)} />)}
-          <span className="hidden shrink-0 border-l border-neutral-200 pl-3 text-xs text-neutral-400 md:inline">총 {filters.search || filters.year.length || filters.category.length ? resultCount : 247}개 작품</span>
+          <span className="hidden shrink-0 border-l border-neutral-200 pl-3 text-xs text-neutral-400 md:inline">총 {resultCount}개 작품</span>
         </div>
 
         <form className="relative h-[20px] min-w-0 flex-1 leading-none md:ml-auto md:h-[30px] md:max-w-[500px]" onSubmit={(event) => { event.preventDefault(); submitSearch() }} role="search">
