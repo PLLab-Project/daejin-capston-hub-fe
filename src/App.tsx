@@ -198,7 +198,7 @@ export default function App() {
   }), [categoryIdByName, filters, page])
   const galleryQueryKey = `${JSON.stringify(galleryQuery)}:${galleryReloadKey}`
   const galleryLoading = galleryState.key !== galleryQueryKey
-  const galleryProjects = galleryLoading ? [] : galleryState.projects
+  const galleryProjects = galleryLoading ? [] : galleryState.projects.slice(0, homePageSize)
   const homeTotalPages = Math.max(1, galleryState.totalPages)
   const currentHomePage = Math.min(page, homeTotalPages)
   const noticeQueryKey = `all-notices:${noticeReloadKey}`
@@ -223,7 +223,6 @@ export default function App() {
     ? myProjectDetailState.projectId === selectedProjectId ? myProjectDetailState.project : null
     : projectDetailState.projectId === selectedProjectId ? projectDetailState.project : null
   const selectedNotice = noticeDetailState.noticeId === selectedNoticeId ? noticeDetailState.notice : null
-  const myPageProjects = (profileState.data?.myProjects ?? []).map((project) => createProjectReference(project, true))
   const myPageFavoriteProjects = (profileState.data?.myBookmarkProjects ?? []).map((project) => createProjectReference(project, false))
   const managedNotices = publicNoticeState.notices.filter((notice) => notice.noticeType === 'SERVICE')
 
@@ -881,11 +880,14 @@ export default function App() {
       ) : currentPage === 'my-page' ? (
         <MyPage
           profile={profile}
-          myProjects={myPageProjects}
+          myProjects={myProjects}
           favoriteProjects={myPageFavoriteProjects}
-          loading={profileLoading}
-          errorMessage={profileState.error}
-          onRetry={() => setProfileReloadKey((key) => key + 1)}
+          loading={profileLoading || myProjectsLoading}
+          errorMessage={profileState.error || myProjectsState.error}
+          onRetry={() => {
+            setProfileReloadKey((key) => key + 1)
+            setMyProjectsReloadKey((key) => key + 1)
+          }}
           onProfileChange={async (nextProfile) => {
             await updateMyProfile({ name: nextProfile.name, email: nextProfile.email })
             setProfile(nextProfile)
