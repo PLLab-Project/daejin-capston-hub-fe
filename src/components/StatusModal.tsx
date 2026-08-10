@@ -35,8 +35,8 @@ export function StatusModal({ open, title, description, onClose }: StatusModalPr
       <section
         className="w-[233px] max-w-[calc(100vw-40px)] rounded-[15px] bg-white px-[10px] pb-2 pt-[34px] text-center md:w-[316px] md:pt-[38px]"
         style={{
-          width: 'fit-content',
-          minWidth: 'min(233px, calc(100vw - 24px))',
+          width: 'max-content',
+          minWidth: 'min(316px, calc(100vw - 24px))',
           maxWidth: 'calc(100vw - 24px)',
           paddingRight: 12,
           paddingLeft: 12,
