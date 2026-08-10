@@ -243,14 +243,17 @@ button { cursor: pointer; }
 }
 
 .filter-dropdown.is-open .filter-dropdown__chevron { transform: rotate(180deg); }
-.filter-dropdown.is-open .filter-dropdown__trigger { border-radius: 10px 10px 0 0; }
+.filter-dropdown.is-open .filter-dropdown__trigger {
+  border-radius: 10px 10px 0 0;
+  background: rgb(236 236 236 / 90%);
+}
 
 .filter-dropdown__menu {
   position: fixed;
   z-index: 60;
   overflow: hidden;
   border-radius: 0 0 10px 10px;
-  background: rgb(236 236 236 / 80%);
+  background: rgb(236 236 236 / 90%);
   box-shadow: none;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
