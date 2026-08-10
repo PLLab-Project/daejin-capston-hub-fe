@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
 
 interface ConfirmModalProps {
   open: boolean
@@ -43,14 +42,9 @@ export function ConfirmModal({
   return (
     <div className="login-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel() }}>
       <section className="w-[313px] max-w-[calc(100vw-40px)] rounded-[15px] bg-white p-5 md:w-[420px] md:p-8" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 id="confirm-title" className="text-[16px] font-bold text-neutral-900 md:text-[20px]">{title}</h2>
-            <p id="confirm-description" className="mt-2 text-[10px] leading-4 text-neutral-400 md:text-[12px] md:leading-5">{description}</p>
-          </div>
-          <button type="button" className="login-modal__close flex-none" aria-label="확인 창 닫기" onClick={onCancel}>
-            <X aria-hidden="true" />
-          </button>
+        <div className="text-center">
+          <h2 id="confirm-title" className="text-[16px] font-bold text-neutral-900 md:text-[20px]">{title}</h2>
+          <p id="confirm-description" className="mt-2 text-[10px] leading-4 text-neutral-400 md:text-[12px] md:leading-5">{description}</p>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-2.5 md:mt-8 md:gap-3">

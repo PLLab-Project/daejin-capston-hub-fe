@@ -32,7 +32,7 @@ import { navigateHash, noticeHash, pageHash, projectHash, readHashRoute, type Ap
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
 const homePageSize = 12
-const noticePageSize = 12
+const noticePageSize = 20
 const initialRoute = typeof window === 'undefined'
   ? { page: 'gallery' as AppPage, projectId: null, noticeId: null, editingProjectId: null }
   : readHashRoute()
@@ -42,6 +42,20 @@ const authenticatedPages = new Set<AppPage>(['register', 'my-projects', 'favorit
 interface FeedbackMessage {
   title: string
   description?: string
+}
+
+function isSignupCompletePreview() {
+  return typeof window !== 'undefined'
+    && import.meta.env.DEV
+    && new URLSearchParams(window.location.search).get('preview') === 'signup-complete'
+}
+
+function getInitialFeedback(): FeedbackMessage | null {
+  if (!isSignupCompletePreview()) return null
+  return {
+    title: '정보 등록이 완료되었습니다.',
+    description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.',
+  }
 }
 
 interface ProjectCollectionState {
@@ -125,7 +139,7 @@ export default function App() {
   const [projects, setProjects] = useState<GalleryProject[]>([])
   const [filters, setFilters] = useState(initialFilters)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [authStep, setAuthStep] = useState<AuthStep>(initialAuthSession?.newUser ? 'first-login' : 'closed')
+  const [authStep, setAuthStep] = useState<AuthStep>(isSignupCompletePreview() ? 'closed' : initialAuthSession?.newUser ? 'first-login' : 'closed')
   const [isLoggedIn, setIsLoggedIn] = useState(Boolean(initialAuthSession && !initialAuthSession.newUser))
   const [isAdmin, setIsAdmin] = useState(hasAdminRole(initialAuthSession?.role))
   const [authSubmitting, setAuthSubmitting] = useState(false)
@@ -139,7 +153,7 @@ export default function App() {
   const [editingProjectId, setEditingProjectId] = useState<number | null>(initialRoute.editingProjectId)
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
-  const [feedback, setFeedback] = useState<FeedbackMessage | null>(null)
+  const [feedback, setFeedback] = useState<FeedbackMessage | null>(getInitialFeedback)
   const [categories, setCategories] = useState<CategoryResponse[]>([])
   const [galleryReloadKey, setGalleryReloadKey] = useState(0)
   const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('')
@@ -627,7 +641,10 @@ export default function App() {
       setProfile((current) => ({ ...current, ...firstLoginProfile }))
       setIsLoggedIn(true)
       setAuthStep('closed')
-      setFeedback({ title: '정보 등록이 완료되었습니다.', description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.' })
+      setFeedback({
+        title: '정보 등록이 완료되었습니다.',
+        description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.',
+      })
       showGallery()
     } catch (error) {
       setSignupError(getAuthErrorMessage(error, '회원 정보 등록 중 오류가 발생했습니다. 다시 시도해 주세요.'))
