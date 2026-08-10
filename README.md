@@ -4,7 +4,7 @@
 
 ## 배포 주소
 
-- [졸업작품 갤러리 바로가기](https://daejin-capston-hub-fe.vercel.app/)
+- [졸업작품 갤러리 바로가기](https://www.woojins-house.com/)
 
 ## 기술 스택
 

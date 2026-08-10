@@ -20,7 +20,7 @@ import { login as loginApi, signup as signupApi } from './api/auth'
 import { toggleProjectBookmark } from './api/bookmark'
 import { getAdminProjects, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
 import { ApiError } from './api/client'
-import { getCategories, getNoticeDetail, getProjectDetail, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
+import { getCategories, getNoticeDetail, getProjectDetail, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
 import { getMyProjectDetail, getMyProjectPreviews } from './api/myProjects'
 import { getMyProfile, updateMyProfile, type MypageProjectResponse, type MypageResponse } from './api/mypage'
@@ -658,29 +658,30 @@ export default function App() {
     navigateTo(projectHash(id, source, true))
   }
 
-  const registerProject = (data: ProjectRegistrationData) => {
-    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '.')
+  const registerProject = async (data: ProjectRegistrationData) => {
+    const categoryId = categoryIdByName.get(data.category)
+    if (categoryId === undefined) throw new Error('선택한 분야 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.')
+    if (!data.thumbnail || !data.presentationReport || !data.descriptionReport || !data.projectZip) {
+      throw new Error('필수 파일을 모두 등록해 주세요.')
+    }
 
-    setProjects((items) => [
-      ...items,
-      {
-        id: Math.max(0, ...items.map((project) => project.id)) + 1,
-        title: data.title,
-        description: data.summary,
-        detailSummary: data.summary,
-        field: data.category,
-        techStack: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
-        longDescription: data.description,
-        demoVideoUrl: data.demoVideoUrl || 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-        author: data.author || profile.name,
-        date,
-        year: Number(date.slice(0, 4)),
-        category: data.category,
-        bookmarked: false,
-        owned: true,
-        approvalStatus: 'pending',
-      },
-    ])
+    await registerProjectApi({
+      title: data.title,
+      summary: data.summary,
+      categoryId,
+      techStacks: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+      description: data.description,
+      demoVideoUrl: data.demoVideoUrl,
+    }, {
+      thumbnail: data.thumbnail,
+      addImage: data.additionalImages,
+      presentationReport: data.presentationReport,
+      descriptionReport: data.descriptionReport,
+      projectZip: data.projectZip,
+    })
+
+    setMyProjectsReloadKey((key) => key + 1)
+    setGalleryReloadKey((key) => key + 1)
     setFeedback({
       title: '작품 등록이 완료되었습니다.',
       description: '등록한 작품은 내 작품에서 확인할 수 있으며 관리자 승인 후 갤러리에 공개됩니다.',
@@ -800,6 +801,7 @@ export default function App() {
             techStack: editingProject.techStack.join(', '),
             description: editingProject.longDescription,
             demoVideoUrl: editingProject.demoVideoUrl,
+            additionalImages: [],
           }}
           onCancel={() => {
             const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'

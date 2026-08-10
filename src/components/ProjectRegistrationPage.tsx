@@ -16,6 +16,11 @@ export interface ProjectRegistrationData {
   techStack: string
   description: string
   demoVideoUrl: string
+  thumbnail?: File
+  additionalImages: File[]
+  presentationReport?: File
+  descriptionReport?: File
+  projectZip?: File
 }
 
 interface ProjectRegistrationPageProps {
@@ -23,7 +28,7 @@ interface ProjectRegistrationPageProps {
   adminMode?: boolean
   initialData?: ProjectRegistrationData
   onCancel: () => void
-  onSubmit: (data: ProjectRegistrationData) => void
+  onSubmit: (data: ProjectRegistrationData) => void | Promise<void>
 }
 
 export function ProjectRegistrationPage({ mode = 'create', adminMode = false, initialData, onCancel, onSubmit }: ProjectRegistrationPageProps) {
@@ -31,6 +36,13 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [category, setCategory] = useState<ProjectCategory | ''>(initialData?.category ?? '')
   const [description, setDescription] = useState(initialData?.description ?? '')
+  const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([])
+  const [additionalImages, setAdditionalImages] = useState<File[]>([])
+  const [presentationReport, setPresentationReport] = useState<File | null>(null)
+  const [descriptionReport, setDescriptionReport] = useState<File | null>(null)
+  const [projectZip, setProjectZip] = useState<File | null>(null)
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const isEditing = mode === 'edit'
 
   useEffect(() => {
@@ -49,24 +61,42 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
     }
   }, [])
 
-  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+  const submitForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setSubmitError('')
     if (!category) {
       setCategoryOpen(true)
       return
     }
 
+    if (!isEditing && (!thumbnailFiles[0] || !presentationReport || !descriptionReport || !projectZip)) {
+      setSubmitError('대표 이미지, 발표 보고서, 설명 보고서, 프로젝트 압축파일을 모두 등록해 주세요.')
+      return
+    }
+
     const formData = new FormData(event.currentTarget)
-    onSubmit({
-      studentId: String(formData.get('studentId') ?? '').trim() || undefined,
-      author: String(formData.get('author') ?? '').trim() || undefined,
-      title: String(formData.get('title') ?? '').trim(),
-      summary: String(formData.get('summary') ?? '').trim(),
-      category,
-      techStack: String(formData.get('techStack') ?? '').trim(),
-      description: description.trim(),
-      demoVideoUrl: String(formData.get('demoVideoUrl') ?? '').trim(),
-    })
+    setSubmitting(true)
+    try {
+      await onSubmit({
+        studentId: String(formData.get('studentId') ?? '').trim() || undefined,
+        author: String(formData.get('author') ?? '').trim() || undefined,
+        title: String(formData.get('title') ?? '').trim(),
+        summary: String(formData.get('summary') ?? '').trim(),
+        category,
+        techStack: String(formData.get('techStack') ?? '').trim(),
+        description: description.trim(),
+        demoVideoUrl: String(formData.get('demoVideoUrl') ?? '').trim(),
+        thumbnail: thumbnailFiles[0],
+        additionalImages,
+        presentationReport: presentationReport ?? undefined,
+        descriptionReport: descriptionReport ?? undefined,
+        projectZip: projectZip ?? undefined,
+      })
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '작품 등록 중 오류가 발생했습니다. 다시 시도해 주세요.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -168,20 +198,24 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
               label="대표 이미지 *"
               mode="representative"
               boxClassName="h-28"
+              onFilesChange={setThumbnailFiles}
             />
             <ImageUploadField
               label="추가 이미지 (최대 5장)"
               mode="additional"
               boxClassName="h-16 md:h-14"
+              onFilesChange={setAdditionalImages}
             />
           </div>
 
           <div className="space-y-3 md:space-y-4">
-            <FileUploadField label="발표 보고서 *" accept=".ppt,.pptx" hint="PPT · 50MB" boxClassName="h-[30px] md:h-11" />
-            <FileUploadField label="설명 보고서 *" accept=".hwp" hint="HWP · 50MB" boxClassName="h-[30px] md:h-11" />
-            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 100MB" boxClassName="h-[30px] md:h-11" />
+            <FileUploadField label="발표 보고서 *" accept=".ppt,.pptx" hint="PPT · 50MB" boxClassName="h-[30px] md:h-11" onFileChange={setPresentationReport} />
+            <FileUploadField label="설명 보고서 *" accept=".hwp" hint="HWP · 50MB" boxClassName="h-[30px] md:h-11" onFileChange={setDescriptionReport} />
+            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 100MB" boxClassName="h-[30px] md:h-11" onFileChange={setProjectZip} />
           </div>
         </div>
+
+        {submitError && <p className="text-[9px] leading-4 text-red-500 md:text-[11px]" role="alert">{submitError}</p>}
 
         <aside className="rounded-[4px] bg-[#eef3ff] px-2.5 py-2 text-[8px] leading-[13px] text-brand md:px-4 md:py-3 md:text-[10px] md:leading-4">
           <strong className="block font-semibold">확인사항</strong>
@@ -190,7 +224,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
 
         <div className="flex items-center justify-between pt-3 md:pt-0">
           <button type="button" className="h-[30px] w-[84px] rounded-[7px] border border-neutral-300 bg-white text-[10px] text-neutral-500 hover:border-neutral-400 md:h-[46px] md:w-[160px] md:text-[13px]" onClick={onCancel}>취소</button>
-          <button type="submit" className="h-[30px] w-[122px] rounded-[7px] bg-brand text-[10px] font-semibold text-white hover:bg-[#013f85] md:h-[46px] md:w-64 md:text-[13px]">{isEditing ? '수정 완료' : '등록 완료'}</button>
+          <button type="submit" disabled={submitting} className="h-[30px] w-[122px] rounded-[7px] bg-brand text-[10px] font-semibold text-white hover:bg-[#013f85] disabled:cursor-not-allowed disabled:opacity-60 md:h-[46px] md:w-64 md:text-[13px]">{submitting ? (isEditing ? '수정 중...' : '등록 중...') : (isEditing ? '수정 완료' : '등록 완료')}</button>
         </div>
       </form>
     </main>
@@ -213,16 +247,19 @@ interface ImagePreview {
   id: string
   name: string
   url: string
+  file: File
 }
 
 function ImageUploadField({
   label,
   mode,
   boxClassName,
+  onFilesChange,
 }: {
   label: string
   mode: 'representative' | 'additional'
   boxClassName: string
+  onFilesChange: (files: File[]) => void
 }) {
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -235,6 +272,10 @@ function ImageUploadField({
   useEffect(() => {
     previewsRef.current = previews
   }, [previews])
+
+  useEffect(() => {
+    onFilesChange(previews.map((preview) => preview.file))
+  }, [onFilesChange, previews])
 
   useEffect(() => () => {
     previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview.url))
@@ -266,6 +307,7 @@ function ImageUploadField({
           id: `${fileKey}--${Date.now()}-${index}`,
           name: file.name,
           url: URL.createObjectURL(file),
+          file,
         }
       })
 
@@ -393,11 +435,13 @@ function FileUploadField({
   accept,
   hint,
   boxClassName,
+  onFileChange,
 }: {
   label: string
   accept: string
   hint: ReactNode
   boxClassName: string
+  onFileChange: (file: File | null) => void
 }) {
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -423,6 +467,7 @@ function FileUploadField({
     }
 
     setSelectedFile(file)
+    onFileChange(file)
     setErrorMessage('')
   }
 
@@ -458,7 +503,7 @@ function FileUploadField({
             <FileIcon className="mr-1.5 h-3 w-3 flex-none text-brand md:h-3.5 md:w-3.5" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-neutral-600" title={selectedFile.name}>{selectedFile.name}</span>
             <button type="button" className="ml-2 flex-none text-[8px] text-brand hover:underline md:text-[9px]" onClick={() => inputRef.current?.click()}>변경</button>
-            <button type="button" className="ml-1.5 grid h-4 w-4 flex-none place-items-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600" aria-label={`${selectedFile.name} 삭제`} onClick={() => { setSelectedFile(null); setErrorMessage('') }}>
+            <button type="button" className="ml-1.5 grid h-4 w-4 flex-none place-items-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600" aria-label={`${selectedFile.name} 삭제`} onClick={() => { setSelectedFile(null); onFileChange(null); setErrorMessage('') }}>
               <X className="h-2.5 w-2.5" aria-hidden="true" />
             </button>
           </>

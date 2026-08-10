@@ -81,6 +81,23 @@ export interface NoticeSearchParams {
   size?: number
 }
 
+export interface RegisterProjectRequest {
+  title: string
+  summary: string
+  categoryId: number
+  techStacks: string[]
+  description: string
+  demoVideoUrl: string
+}
+
+export interface RegisterProjectFiles {
+  thumbnail: File
+  addImage: File[]
+  presentationReport: File
+  descriptionReport: File
+  projectZip: File
+}
+
 function createQuery(params: Record<string, string | number | Array<string | number> | undefined>) {
   const query = new URLSearchParams()
 
@@ -111,6 +128,21 @@ export function searchProjects(params: ProjectSearchParams) {
 
 export function getProjectDetail(projectId: number) {
   return apiRequest<ProjectDetailResponse>(`/home/project/detail/${projectId}`)
+}
+
+export function registerProject(request: RegisterProjectRequest, files: RegisterProjectFiles) {
+  const formData = new FormData()
+  formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
+  formData.append('thumbnail', files.thumbnail)
+  files.addImage.forEach((file) => formData.append('addImage', file))
+  formData.append('presentationReport', files.presentationReport)
+  formData.append('descriptionReport', files.descriptionReport)
+  formData.append('projectZip', files.projectZip)
+
+  return apiRequest<number>('/home/project', {
+    method: 'POST',
+    body: formData,
+  })
 }
 
 export function getCategories() {
