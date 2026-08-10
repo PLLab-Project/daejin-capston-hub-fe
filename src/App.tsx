@@ -261,10 +261,13 @@ export default function App() {
     searchNotices({ page: 0, size: 1000 })
       .then((response) => {
         if (cancelled) return
+        const notices = [...response.data.content]
+          .sort((first, second) => second.createdAt.localeCompare(first.createdAt))
+          .map(mapNoticePreview)
         setPublicNoticeState({
           key: requestKey,
-          notices: response.data.content.map(mapNoticePreview),
-          totalPages: Math.max(1, Math.ceil(response.data.content.length / noticePageSize)),
+          notices,
+          totalPages: Math.max(1, Math.ceil(notices.length / noticePageSize)),
           error: '',
         })
       })
