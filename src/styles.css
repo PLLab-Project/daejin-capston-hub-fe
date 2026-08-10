@@ -250,7 +250,7 @@ button { cursor: pointer; }
   z-index: 60;
   overflow: hidden;
   border-radius: 0 0 10px 10px;
-  background: rgb(230 230 230 / 60%);
+  background: rgb(236 236 236 / 80%);
   box-shadow: none;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);

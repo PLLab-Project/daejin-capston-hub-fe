@@ -339,7 +339,7 @@ export function AdminPage({
           )}
         </div>
 
-        <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="관리자 목록 페이지 이동" className="mb-10 mt-auto pt-10 md:mb-0" />
+        <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="관리자 목록 페이지 이동" className="mb-10 mt-auto" />
       </main>
 
       <ConfirmModal

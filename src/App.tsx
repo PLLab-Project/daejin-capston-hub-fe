@@ -3,7 +3,6 @@ import { Header } from './components/Header'
 import { Filters, type FilterState } from './components/Filters'
 import { ProjectCard } from './components/ProjectCard'
 import { ProjectDetail } from './components/ProjectDetail'
-import { Footer } from './components/Footer'
 import { LoginModal } from './components/LoginModal'
 import { FirstLoginModal } from './components/FirstLoginModal'
 import { NoticePage } from './components/NoticePage'
@@ -982,12 +981,11 @@ export default function App() {
                 window.scrollTo({ top: 0, behavior: 'auto' })
               }}
               ariaLabel="페이지 이동"
-              className="mb-10 mt-auto pt-10 md:mb-0 md:pt-[57px]"
+              className="mb-10 mt-auto md:mb-10"
             />
           )}
         </main>
       )}
-      <Footer />
       <LoginModal
         open={authStep === 'login'}
         errorMessage={loginError}

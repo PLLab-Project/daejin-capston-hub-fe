@@ -96,7 +96,7 @@ export function NoticePage({
         </table>
       </div>
 
-      <Pagination page={Math.min(page, safeTotalPages)} totalPages={safeTotalPages} onChange={onPageChange} ariaLabel="공지사항 페이지 이동" className="mb-[43px] mt-auto md:mb-0" />
+      <Pagination page={Math.min(page, safeTotalPages)} totalPages={safeTotalPages} onChange={onPageChange} ariaLabel="공지사항 페이지 이동" className="mb-[43px] mt-auto md:mb-10" />
     </main>
   )
 }
