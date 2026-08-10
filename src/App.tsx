@@ -930,7 +930,7 @@ export default function App() {
           onOpen={showProject}
         />
       ) : (
-        <main className="page-container flex-1">
+        <main className="page-container flex flex-1 flex-col">
           <Filters key={filters.search} filters={filters} resultCount={galleryState.totalElements} categoryOptions={categoryOptions} onChange={updateFilters} />
 
           {galleryLoading ? (
@@ -962,7 +962,7 @@ export default function App() {
                 window.scrollTo({ top: 0, behavior: 'auto' })
               }}
               ariaLabel="페이지 이동"
-              className="mb-10 mt-10 md:mb-0 md:mt-[57px]"
+              className="mb-10 mt-auto pt-10 md:mb-0 md:pt-[57px]"
             />
           )}
         </main>
