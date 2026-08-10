@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
-interface LoginCredentials {
+export interface LoginCredentials {
   studentId: string
   password: string
   remember: boolean
@@ -9,11 +9,14 @@ interface LoginCredentials {
 
 interface LoginModalProps {
   open: boolean
+  errorMessage?: string
+  submitting?: boolean
   onClose: () => void
-  onSubmit: (credentials: LoginCredentials) => void
+  onInputChange?: () => void
+  onSubmit: (credentials: LoginCredentials) => void | Promise<void>
 }
 
-export function LoginModal({ open, onClose, onSubmit }: LoginModalProps) {
+export function LoginModal({ open, errorMessage, submitting = false, onClose, onInputChange, onSubmit }: LoginModalProps) {
   const [studentId, setStudentId] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -28,7 +31,7 @@ export function LoginModal({ open, onClose, onSubmit }: LoginModalProps) {
     studentIdRef.current?.focus()
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !submitting) onClose()
     }
     document.addEventListener('keydown', closeOnEscape)
 
@@ -36,16 +39,16 @@ export function LoginModal({ open, onClose, onSubmit }: LoginModalProps) {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [open, onClose])
+  }, [open, onClose, submitting])
 
   if (!open) return null
 
   return (
-    <div className="login-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="login-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) onClose() }}>
       <section className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
         <div className="flex items-center justify-between">
           <h2 id="login-title" className="login-modal__title">로그인</h2>
-          <button type="button" className="login-modal__close" aria-label="로그인 창 닫기" onClick={onClose}>
+          <button type="button" className="login-modal__close" aria-label="로그인 창 닫기" disabled={submitting} onClick={onClose}>
             <X aria-hidden="true" />
           </button>
         </div>
@@ -65,7 +68,11 @@ export function LoginModal({ open, onClose, onSubmit }: LoginModalProps) {
               inputMode="numeric"
               autoComplete="username"
               value={studentId}
-              onChange={(event) => setStudentId(event.target.value)}
+              disabled={submitting}
+              onChange={(event) => {
+                setStudentId(event.target.value)
+                onInputChange?.()
+              }}
               placeholder="학번을 입력하세요"
               required
             />
@@ -78,22 +85,30 @@ export function LoginModal({ open, onClose, onSubmit }: LoginModalProps) {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                disabled={submitting}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  onInputChange?.()
+                }}
                 placeholder="비밀번호를 입력하세요"
                 required
               />
-              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}>
+              <button type="button" disabled={submitting} onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}>
                 {showPassword ? '숨기기' : '표시'}
               </button>
             </span>
           </label>
 
           <label className="login-remember">
-            <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+            <input type="checkbox" checked={remember} disabled={submitting} onChange={(event) => setRemember(event.target.checked)} />
             <span>로그인 상태 유지</span>
           </label>
 
-          <button type="submit" className="login-submit">로그인</button>
+          {errorMessage && <p className="text-[10px] leading-4 text-red-500" role="alert">{errorMessage}</p>}
+
+          <button type="submit" className="login-submit disabled:cursor-wait disabled:opacity-70" disabled={submitting}>
+            {submitting ? '로그인 중...' : '로그인'}
+          </button>
         </form>
       </section>
     </div>

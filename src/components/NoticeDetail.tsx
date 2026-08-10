@@ -8,6 +8,12 @@ interface NoticeDetailProps {
 }
 
 export function NoticeDetail({ notice, backLabel = '공지사항 목록', onBack }: NoticeDetailProps) {
+  const attachments = notice.attachments?.length
+    ? notice.attachments
+    : notice.attachmentName
+      ? [{ originalName: notice.attachmentName, fileUrl: '' }]
+      : []
+
   return (
     <main className="page-container flex flex-1 flex-col pt-3 md:pt-[17px]">
       <button type="button" className="flex h-5 w-fit items-center pr-2.5 text-[8px] leading-none text-neutral-400 hover:text-brand md:h-[30px] md:pr-5 md:text-[11px]" onClick={onBack}>
@@ -25,12 +31,23 @@ export function NoticeDetail({ notice, backLabel = '공지사항 목록', onBack
           {notice.content}
         </div>
 
-        <div className="flex min-h-[32px] w-full items-center border-t border-neutral-200 px-2.5 text-[9px] md:min-h-[40px] md:px-5 md:text-[11px]">
+        <div className="flex min-h-[32px] w-full items-start border-t border-neutral-200 px-2.5 py-2 text-[9px] md:min-h-[40px] md:px-5 md:text-[11px]">
           <strong className="w-[62px] flex-none font-semibold text-neutral-600 md:w-[86px]">첨부파일</strong>
-          <button type="button" className="flex min-w-0 items-center text-brand hover:underline">
-            <Paperclip className="mr-1 h-2.5 w-2.5 flex-none md:h-3 md:w-3" aria-hidden="true" />
-            <span className="truncate">{notice.attachmentName}</span>
-          </button>
+          <div className="min-w-0 space-y-1">
+            {attachments.length > 0 ? attachments.map((attachment) => (
+              attachment.fileUrl ? (
+                <a key={`${attachment.fileUrl}-${attachment.originalName}`} href={attachment.fileUrl} target="_blank" rel="noreferrer" className="flex min-w-0 items-center text-brand hover:underline">
+                  <Paperclip className="mr-1 h-2.5 w-2.5 flex-none md:h-3 md:w-3" aria-hidden="true" />
+                  <span className="truncate">{attachment.originalName}</span>
+                </a>
+              ) : (
+                <span key={attachment.originalName} className="flex min-w-0 items-center text-brand">
+                  <Paperclip className="mr-1 h-2.5 w-2.5 flex-none md:h-3 md:w-3" aria-hidden="true" />
+                  <span className="truncate">{attachment.originalName}</span>
+                </span>
+              )
+            )) : <span className="text-neutral-400">없음</span>}
+          </div>
         </div>
       </article>
 

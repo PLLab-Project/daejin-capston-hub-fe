@@ -1,34 +1,35 @@
 import { Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { Notice } from '../types/notice'
 import { Pagination } from './Pagination'
 
-const pageSize = 12
-
 interface NoticePageProps {
   notices: Notice[]
-  onOpen: (id: number) => void
+  page: number
+  totalPages: number
+  loading?: boolean
+  errorMessage?: string
+  onOpen: (notice: Notice) => void
+  onSearch: (keyword: string) => void
+  onPageChange: (page: number) => void
+  onRetry?: () => void
 }
 
-export function NoticePage({ notices, onOpen }: NoticePageProps) {
+export function NoticePage({
+  notices,
+  page,
+  totalPages,
+  loading = false,
+  errorMessage = '',
+  onOpen,
+  onSearch,
+  onPageChange,
+  onRetry,
+}: NoticePageProps) {
   const [searchDraft, setSearchDraft] = useState('')
-  const [searchKeyword, setSearchKeyword] = useState('')
-  const [page, setPage] = useState(1)
+  const safeTotalPages = Math.max(1, totalPages)
 
-  const filteredNotices = useMemo(() => {
-    const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
-    if (!keyword) return notices
-    return notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword))
-  }, [notices, searchKeyword])
-
-  const totalPages = Math.max(1, Math.ceil(filteredNotices.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const paginatedNotices = filteredNotices.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-
-  const submitSearch = () => {
-    setSearchKeyword(searchDraft.trim())
-    setPage(1)
-  }
+  const submitSearch = () => onSearch(searchDraft.trim())
 
   return (
     <main className="page-container flex flex-1 flex-col pt-3 md:pt-[17px]">
@@ -65,26 +66,31 @@ export function NoticePage({ notices, onOpen }: NoticePageProps) {
             </tr>
           </thead>
           <tbody>
-            {paginatedNotices.map((notice) => (
-              <tr key={notice.id} className="h-[25px] border-b border-neutral-200 text-[10px] text-neutral-700 transition-colors hover:bg-neutral-50 md:h-[32px] md:text-[12px]">
+            {!loading && !errorMessage && notices.map((notice) => (
+              <tr key={notice.externalUrl ?? notice.id} className="h-[25px] border-b border-neutral-200 text-[10px] text-neutral-700 transition-colors hover:bg-neutral-50 md:h-[32px] md:text-[12px]">
                 <td className="truncate px-2.5 md:px-5">
-                  <button type="button" className="block w-full truncate text-left hover:text-brand hover:underline" onClick={() => onOpen(notice.id)}>
+                  <button type="button" className="block w-full truncate text-left hover:text-brand hover:underline" onClick={() => onOpen(notice)}>
                     {notice.title}
                   </button>
                 </td>
                 <td className="px-1 text-[8px] text-neutral-400 md:px-0 md:text-[10px]">{notice.date}</td>
               </tr>
             ))}
-            {filteredNotices.length === 0 && (
+            {(loading || errorMessage || notices.length === 0) && (
               <tr className="h-20 border-b border-neutral-200">
-                <td colSpan={2} className="text-center text-[10px] text-neutral-400 md:text-[12px]">검색 결과가 없습니다.</td>
+                <td colSpan={2} className={`text-center text-[10px] md:text-[12px] ${errorMessage ? 'text-red-500' : 'text-neutral-400'}`}>
+                  {loading ? '공지사항을 불러오는 중입니다.' : errorMessage || '검색 결과가 없습니다.'}
+                  {errorMessage && onRetry && (
+                    <button type="button" className="ml-2 text-brand hover:underline" onClick={onRetry}>다시 시도</button>
+                  )}
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="공지사항 페이지 이동" className="mb-[43px] mt-auto md:mb-0" />
+      <Pagination page={Math.min(page, safeTotalPages)} totalPages={safeTotalPages} onChange={onPageChange} ariaLabel="공지사항 페이지 이동" className="mb-[43px] mt-auto md:mb-0" />
     </main>
   )
 }

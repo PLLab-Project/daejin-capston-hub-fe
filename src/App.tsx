@@ -15,71 +15,442 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { AdminPage, type AdminNoticeData } from './components/AdminPage'
 import { Pagination } from './components/Pagination'
 import { StatusModal } from './components/StatusModal'
-import { initialProjects } from './data/projects'
-import { initialNotices } from './data/notices'
+import { LoginRequiredModal } from './components/LoginRequiredModal'
+import { login as loginApi, signup as signupApi } from './api/auth'
+import { toggleProjectBookmark } from './api/bookmark'
+import { getAdminProjects, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
+import { ApiError } from './api/client'
+import { getCategories, getNoticeDetail, getProjectDetail, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
+import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
+import { getMyProjectDetail, getMyProjectPreviews } from './api/myProjects'
+import { getMyProfile, updateMyProfile, type MypageProjectResponse, type MypageResponse } from './api/mypage'
+import { clearAuthSession, completeSignup, getAuthSession, saveAuthSession } from './api/tokenStorage'
+import type { Notice } from './types/notice'
+import type { GalleryProject, ProjectCategory } from './types/project'
 import { navigateHash, noticeHash, pageHash, projectHash, readHashRoute, type AppPage, type ProjectSourcePage } from './utils/hashRoute'
 
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
 const homePageSize = 12
+const noticePageSize = 12
 const initialRoute = typeof window === 'undefined'
   ? { page: 'gallery' as AppPage, projectId: null, noticeId: null, editingProjectId: null }
   : readHashRoute()
+const initialAuthSession = typeof window === 'undefined' ? null : getAuthSession()
+const authenticatedPages = new Set<AppPage>(['register', 'my-projects', 'favorites', 'my-page', 'admin'])
 
 interface FeedbackMessage {
   title: string
   description?: string
 }
 
+interface ProjectCollectionState {
+  key: string
+  projects: GalleryProject[]
+  totalPages: number
+  totalElements: number
+  error: string
+}
+
+interface NoticeCollectionState {
+  key: string
+  notices: Notice[]
+  totalPages: number
+  error: string
+}
+
+interface ProjectDetailState {
+  projectId: number | null
+  project: GalleryProject | null
+  error: string
+}
+
+interface NoticeDetailState {
+  noticeId: number | null
+  notice: Notice | null
+  error: string
+}
+
+interface ProfileState {
+  key: string
+  data: MypageResponse | null
+  error: string
+}
+
 const initialProfile: UserProfile = {
-  name: '김민정',
-  studentId: '20241472',
-  email: 'minjung2283@gmail.com',
+  name: '',
+  studentId: initialAuthSession?.studentId || '20241472',
+  email: '',
+}
+
+function createProjectReference(project: MypageProjectResponse, owned: boolean): GalleryProject {
+  return {
+    id: project.projectId,
+    title: project.title,
+    description: '',
+    detailSummary: '',
+    field: '',
+    techStack: [],
+    longDescription: '',
+    demoVideoUrl: '',
+    author: '',
+    date: '',
+    year: new Date().getFullYear(),
+    category: '웹',
+    bookmarked: !owned,
+    owned,
+    approvalStatus: 'approved',
+  }
+}
+
+function mapAdminProjectPreview(project: AdminProjectPreviewResponse): GalleryProject {
+  return {
+    ...createProjectReference({ projectId: project.projectId, title: project.title }, false),
+    bookmarked: false,
+    date: formatApiDate(project.createdAt),
+    year: Number(project.createdAt.slice(0, 4)) || new Date().getFullYear(),
+    approvalStatus: mapProjectStatus(project.projectStatus),
+  }
+}
+
+function hasAdminRole(role: string | null | undefined) {
+  return role?.toUpperCase().includes('ADMIN') ?? false
+}
+
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError && error.message ? error.message : fallback
 }
 
 export default function App() {
-  const [projects, setProjects] = useState(initialProjects)
+  const [projects, setProjects] = useState<GalleryProject[]>([])
   const [filters, setFilters] = useState(initialFilters)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [authStep, setAuthStep] = useState<AuthStep>('closed')
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [hasCompletedInitialProfile, setHasCompletedInitialProfile] = useState(false)
+  const [authStep, setAuthStep] = useState<AuthStep>(initialAuthSession?.newUser ? 'first-login' : 'closed')
+  const [isLoggedIn, setIsLoggedIn] = useState(Boolean(initialAuthSession && !initialAuthSession.newUser))
+  const [isAdmin, setIsAdmin] = useState(hasAdminRole(initialAuthSession?.role))
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [signupError, setSignupError] = useState('')
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState<AppPage>(initialRoute.page)
   const [profile, setProfile] = useState<UserProfile>(initialProfile)
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(initialRoute.projectId)
   const [selectedNoticeId, setSelectedNoticeId] = useState<number | null>(initialRoute.noticeId)
   const [editingProjectId, setEditingProjectId] = useState<number | null>(initialRoute.editingProjectId)
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
-  const [notices, setNotices] = useState(initialNotices)
   const [page, setPage] = useState(1)
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null)
-  const selectedProject = projects.find((project) => project.id === selectedProjectId)
-  const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId)
-  const editingProject = projects.find((project) => project.id === editingProjectId)
-  const myProjects = projects.filter((project) => project.owned)
-  const favoriteProjects = projects.filter((project) => project.bookmarked)
+  const [categories, setCategories] = useState<CategoryResponse[]>([])
+  const [galleryReloadKey, setGalleryReloadKey] = useState(0)
+  const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('')
+  const [noticePage, setNoticePage] = useState(1)
+  const [noticeReloadKey, setNoticeReloadKey] = useState(0)
+  const [projectDetailReloadKey, setProjectDetailReloadKey] = useState(0)
+  const [noticeDetailReloadKey, setNoticeDetailReloadKey] = useState(0)
+  const [myProjectsReloadKey, setMyProjectsReloadKey] = useState(0)
+  const [profileReloadKey, setProfileReloadKey] = useState(0)
+  const [favoritesReloadKey, setFavoritesReloadKey] = useState(0)
+  const [adminProjectsReloadKey, setAdminProjectsReloadKey] = useState(0)
+  const [galleryState, setGalleryState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 0, totalElements: 0, error: '' })
+  const [publicNoticeState, setPublicNoticeState] = useState<NoticeCollectionState>({ key: '', notices: [], totalPages: 0, error: '' })
+  const [projectDetailState, setProjectDetailState] = useState<ProjectDetailState>({ projectId: null, project: null, error: '' })
+  const [noticeDetailState, setNoticeDetailState] = useState<NoticeDetailState>({ noticeId: null, notice: null, error: '' })
+  const [myProjectsState, setMyProjectsState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+  const [myProjectDetailState, setMyProjectDetailState] = useState<ProjectDetailState>({ projectId: null, project: null, error: '' })
+  const [profileState, setProfileState] = useState<ProfileState>({ key: '', data: null, error: '' })
+  const [favoriteProjectsState, setFavoriteProjectsState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+  const [adminProjectsState, setAdminProjectsState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+  const myProjects = useMemo(() => [
+    ...myProjectsState.projects,
+    ...projects.filter((project) => project.owned && !myProjectsState.projects.some((item) => item.id === project.id)),
+  ], [myProjectsState.projects, projects])
+  const favoriteProjects = favoriteProjectsState.projects
+  const editingProject = myProjectDetailState.projectId === editingProjectId
+    ? myProjectDetailState.project
+    : myProjects.find((project) => project.id === editingProjectId)
 
-  const filteredProjects = useMemo(() => {
-    const keyword = filters.search.trim().toLocaleLowerCase('ko-KR')
-    const result = projects.filter((project) =>
-      (!filters.year.length || filters.year.includes(String(project.year))) &&
-      (!filters.category.length || filters.category.includes(project.category)) &&
-      (!keyword || [project.title, project.description, project.author].some((value) => value.toLocaleLowerCase('ko-KR').includes(keyword))),
-    )
-    return [...result].sort((a, b) => filters.sort === '이름순' ? a.title.localeCompare(b.title, 'ko-KR') : b.date.localeCompare(a.date))
-  }, [filters, projects])
-  const homeTotalPages = Math.max(1, Math.ceil(filteredProjects.length / homePageSize))
+  const categoryIdByName = useMemo(() => new Map(categories.map((category) => [category.name, category.categoryId])), [categories])
+  const categoryOptions = useMemo(() => {
+    const names = categories.map((category) => category.name).filter((name): name is ProjectCategory => ['웹', '앱', '게임', '임베디드', '보안'].includes(name))
+    return names.length > 0 ? names : ['웹', '앱', '게임', '임베디드', '보안'] as ProjectCategory[]
+  }, [categories])
+  const galleryQuery = useMemo<ProjectSearchParams>(() => ({
+    keyword: filters.search || undefined,
+    year: filters.year[0],
+    categoryIds: filters.category.map((category) => categoryIdByName.get(category)).filter((categoryId): categoryId is number => categoryId !== undefined),
+    sortType: filters.sort === '이름순' ? 'NAME' : 'LATEST',
+    direction: filters.sort === '이름순' ? 'ASC' : 'DESC',
+    page: page - 1,
+    size: homePageSize,
+  }), [categoryIdByName, filters, page])
+  const galleryQueryKey = `${JSON.stringify(galleryQuery)}:${galleryReloadKey}`
+  const galleryLoading = galleryState.key !== galleryQueryKey
+  const galleryProjects = galleryLoading ? [] : galleryState.projects
+  const homeTotalPages = Math.max(1, galleryState.totalPages)
   const currentHomePage = Math.min(page, homeTotalPages)
-  const paginatedProjects = filteredProjects.slice((currentHomePage - 1) * homePageSize, currentHomePage * homePageSize)
+  const noticeQueryKey = `all-notices:${noticeReloadKey}`
+  const noticesLoading = publicNoticeState.key !== noticeQueryKey
+  const filteredPublicNotices = useMemo(() => {
+    const keyword = noticeSearchKeyword.trim().toLocaleLowerCase('ko-KR')
+    return keyword
+      ? publicNoticeState.notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword))
+      : publicNoticeState.notices
+  }, [noticeSearchKeyword, publicNoticeState.notices])
+  const publicNoticeTotalPages = Math.max(1, Math.ceil(filteredPublicNotices.length / noticePageSize))
+  const paginatedPublicNotices = filteredPublicNotices.slice((noticePage - 1) * noticePageSize, noticePage * noticePageSize)
+  const myProjectsQueryKey = `my-projects:${myProjectsReloadKey}`
+  const myProjectsLoading = currentPage === 'my-projects' && myProjectsState.key !== myProjectsQueryKey
+  const profileQueryKey = `profile:${profileReloadKey}`
+  const profileLoading = currentPage === 'my-page' && profileState.key !== profileQueryKey
+  const favoritesQueryKey = `favorites:${favoritesReloadKey}:${profileState.key}`
+  const favoritesLoading = currentPage === 'favorites' && favoriteProjectsState.key !== favoritesQueryKey
+  const adminProjectsQueryKey = `admin-projects:${adminProjectsReloadKey}`
+  const adminProjectsLoading = currentPage === 'admin' && adminProjectsState.key !== adminProjectsQueryKey
+  const selectedProject = currentPage === 'my-projects'
+    ? myProjectDetailState.projectId === selectedProjectId ? myProjectDetailState.project : null
+    : projectDetailState.projectId === selectedProjectId ? projectDetailState.project : null
+  const selectedNotice = noticeDetailState.noticeId === selectedNoticeId ? noticeDetailState.notice : null
+  const myPageProjects = (profileState.data?.myProjects ?? []).map((project) => createProjectReference(project, true))
+  const myPageFavoriteProjects = (profileState.data?.myBookmarkProjects ?? []).map((project) => createProjectReference(project, false))
+  const managedNotices = publicNoticeState.notices.filter((notice) => notice.noticeType === 'SERVICE')
 
   const updateFilters = (next: FilterState) => {
     setFilters(next)
     setPage(1)
   }
 
+  useEffect(() => {
+    let cancelled = false
+    getCategories()
+      .then((response) => {
+        if (!cancelled) setCategories(response.data)
+      })
+      .catch(() => {
+        if (!cancelled) setCategories([])
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const requestKey = galleryQueryKey
+
+    searchProjects(galleryQuery)
+      .then((response) => {
+        if (cancelled) return
+        setGalleryState({
+          key: requestKey,
+          projects: response.data.content.map(mapProjectPreview),
+          totalPages: response.data.totalPages,
+          totalElements: response.data.totalElements,
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setGalleryState({ key: requestKey, projects: [], totalPages: 0, totalElements: 0, error: getAuthErrorMessage(error, '작품 목록을 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [galleryQuery, galleryQueryKey])
+
+  useEffect(() => {
+    let cancelled = false
+    const requestKey = noticeQueryKey
+
+    searchNotices({ page: 0, size: 1000 })
+      .then((response) => {
+        if (cancelled) return
+        setPublicNoticeState({
+          key: requestKey,
+          notices: response.data.content.map(mapNoticePreview),
+          totalPages: Math.max(1, Math.ceil(response.data.content.length / noticePageSize)),
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setPublicNoticeState({ key: requestKey, notices: [], totalPages: 0, error: getAuthErrorMessage(error, '공지사항을 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [noticeQueryKey])
+
+  useEffect(() => {
+    if (selectedProjectId === null || (currentPage !== 'gallery' && currentPage !== 'favorites')) return
+    let cancelled = false
+    const projectId = selectedProjectId
+
+    getProjectDetail(projectId)
+      .then((response) => {
+        if (!cancelled) setProjectDetailState({ projectId, project: mapProjectDetail(response.data), error: '' })
+      })
+      .catch((error) => {
+        if (!cancelled) setProjectDetailState({ projectId, project: null, error: getAuthErrorMessage(error, '작품 상세정보를 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, projectDetailReloadKey, selectedProjectId])
+
+  useEffect(() => {
+    if (!isLoggedIn || (currentPage !== 'my-projects' && currentPage !== 'my-page')) return
+    let cancelled = false
+    const requestKey = myProjectsQueryKey
+
+    getMyProjectPreviews()
+      .then((response) => {
+        if (cancelled) return
+        const loadedProjects = response.data.map(mapMyProjectPreview)
+        setMyProjectsState({
+          key: requestKey,
+          projects: loadedProjects,
+          totalPages: 1,
+          totalElements: loadedProjects.length,
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (!cancelled) setMyProjectsState({ key: requestKey, projects: [], totalPages: 1, totalElements: 0, error: getAuthErrorMessage(error, '내 작품을 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, isLoggedIn, myProjectsQueryKey])
+
+  useEffect(() => {
+    if (!isLoggedIn || selectedProjectId === null || currentPage !== 'my-projects') return
+    let cancelled = false
+    const projectId = selectedProjectId
+
+    getMyProjectDetail(projectId)
+      .then((response) => {
+        if (cancelled) return
+        const preview = myProjects.find((project) => project.id === projectId)
+        setMyProjectDetailState({
+          projectId,
+          project: { ...mapProjectDetail(response.data), owned: true, approvalStatus: preview?.approvalStatus ?? 'pending' },
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (!cancelled) setMyProjectDetailState({ projectId, project: null, error: getAuthErrorMessage(error, '내 작품 상세정보를 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, myProjects, projectDetailReloadKey, selectedProjectId, isLoggedIn])
+
+  useEffect(() => {
+    if (!isLoggedIn || (currentPage !== 'my-page' && currentPage !== 'favorites')) return
+    let cancelled = false
+    const requestKey = profileQueryKey
+
+    getMyProfile()
+      .then((response) => {
+        if (cancelled) return
+        setProfile({ name: response.data.name, studentId: response.data.stdNum, email: response.data.email })
+        setProfileState({ key: requestKey, data: response.data, error: '' })
+      })
+      .catch((error) => {
+        if (!cancelled) setProfileState({ key: requestKey, data: null, error: getAuthErrorMessage(error, '마이페이지 정보를 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, isLoggedIn, profileQueryKey])
+
+  useEffect(() => {
+    if (!isLoggedIn || currentPage !== 'favorites' || profileState.key !== profileQueryKey || !profileState.data) return
+    let cancelled = false
+    const requestKey = favoritesQueryKey
+    const references = profileState.data.myBookmarkProjects ?? []
+
+    Promise.allSettled(references.map((project) => getProjectDetail(project.projectId)))
+      .then((results) => {
+        if (cancelled) return
+        const loadedProjects = results.map((result, index) => result.status === 'fulfilled'
+          ? { ...mapProjectDetail(result.value.data), bookmarked: true }
+          : createProjectReference(references[index], false))
+        setFavoriteProjectsState({
+          key: requestKey,
+          projects: loadedProjects,
+          totalPages: 1,
+          totalElements: loadedProjects.length,
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (!cancelled) setFavoriteProjectsState({ key: requestKey, projects: [], totalPages: 1, totalElements: 0, error: getAuthErrorMessage(error, '즐겨찾기를 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, favoritesQueryKey, isLoggedIn, profileQueryKey, profileState])
+
+  useEffect(() => {
+    if (!isLoggedIn || !isAdmin || currentPage !== 'admin') return
+    let cancelled = false
+    const requestKey = adminProjectsQueryKey
+
+    getAdminProjects()
+      .then((response) => {
+        if (cancelled) return
+        const loadedProjects = response.data.map(mapAdminProjectPreview)
+        setAdminProjectsState({ key: requestKey, projects: loadedProjects, totalPages: 1, totalElements: loadedProjects.length, error: '' })
+      })
+      .catch((error) => {
+        if (!cancelled) setAdminProjectsState({ key: requestKey, projects: [], totalPages: 1, totalElements: 0, error: getAuthErrorMessage(error, '관리할 작품을 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [adminProjectsQueryKey, currentPage, isAdmin, isLoggedIn])
+
+  useEffect(() => {
+    if (selectedNoticeId === null || currentPage !== 'notices') return
+    let cancelled = false
+    const noticeId = selectedNoticeId
+
+    getNoticeDetail(noticeId)
+      .then((response) => {
+        if (!cancelled) setNoticeDetailState({ noticeId, notice: mapNoticeDetail(response.data), error: '' })
+      })
+      .catch((error) => {
+        if (!cancelled) setNoticeDetailState({ noticeId, notice: null, error: getAuthErrorMessage(error, '공지사항 상세정보를 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [currentPage, noticeDetailReloadKey, selectedNoticeId])
+
   const syncRoute = useCallback(() => {
     const route = readHashRoute()
+    const session = getAuthSession()
+
+    if (authenticatedPages.has(route.page) && (!session || session.newUser)) {
+      window.history.replaceState(null, '', pageHash('gallery'))
+      setCurrentPage('gallery')
+      setSelectedProjectId(null)
+      setSelectedNoticeId(null)
+      setEditingProjectId(null)
+      setMenuOpen(false)
+      if (session?.newUser) {
+        setSignupError('서비스 이용을 위해 회원 정보를 입력해 주세요.')
+        setAuthStep('first-login')
+      } else {
+        setAuthStep('closed')
+        setLoginRequiredOpen(true)
+      }
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      return
+    }
+
+    if (route.page === 'admin' && !hasAdminRole(session?.role)) {
+      window.history.replaceState(null, '', pageHash('gallery'))
+      setCurrentPage('gallery')
+      setSelectedProjectId(null)
+      setSelectedNoticeId(null)
+      setEditingProjectId(null)
+      setMenuOpen(false)
+      setFeedback({ title: '관리자 권한이 필요합니다.' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      return
+    }
+
     setCurrentPage(route.page)
     setSelectedProjectId(route.projectId)
     setSelectedNoticeId(route.noticeId)
@@ -93,6 +464,7 @@ export default function App() {
       window.history.replaceState(null, '', pageHash('gallery'))
     }
     window.addEventListener('hashchange', syncRoute)
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
     return () => window.removeEventListener('hashchange', syncRoute)
   }, [syncRoute])
 
@@ -104,7 +476,55 @@ export default function App() {
     navigateHash(hash, replace)
   }, [syncRoute])
 
-  const toggleBookmark = (id: number) => setProjects((items) => items.map((item) => item.id === id ? { ...item, bookmarked: !item.bookmarked } : item))
+  const applyBookmarkState = (id: number, bookmarked: boolean) => {
+    setProjects((items) => items.map((item) => item.id === id ? { ...item, bookmarked } : item))
+    setGalleryState((current) => ({
+      ...current,
+      projects: current.projects.map((project) => project.id === id ? { ...project, bookmarked } : project),
+    }))
+    setProjectDetailState((current) => current.project?.id === id
+      ? { ...current, project: { ...current.project, bookmarked } }
+      : current)
+    setMyProjectsState((current) => ({
+      ...current,
+      projects: current.projects.map((project) => project.id === id ? { ...project, bookmarked } : project),
+    }))
+    setMyProjectDetailState((current) => current.project?.id === id
+      ? { ...current, project: { ...current.project, bookmarked } }
+      : current)
+    setFavoriteProjectsState((current) => ({
+      ...current,
+      projects: bookmarked
+        ? current.projects.map((project) => project.id === id ? { ...project, bookmarked } : project)
+        : current.projects.filter((project) => project.id !== id),
+    }))
+  }
+
+  const toggleBookmark = async (id: number) => {
+    if (!isLoggedIn) {
+      setLoginError('즐겨찾기는 로그인 후 이용할 수 있습니다.')
+      setAuthStep('login')
+      return
+    }
+
+    const project = projectDetailState.project?.id === id
+      ? projectDetailState.project
+      : myProjectDetailState.project?.id === id
+        ? myProjectDetailState.project
+        : [...galleryState.projects, ...myProjects, ...favoriteProjects].find((item) => item.id === id)
+    const previousBookmarked = Boolean(project?.bookmarked)
+    applyBookmarkState(id, !previousBookmarked)
+
+    try {
+      const response = await toggleProjectBookmark(id)
+      applyBookmarkState(id, response.data.bookMarked)
+      setProfileReloadKey((key) => key + 1)
+      setFavoritesReloadKey((key) => key + 1)
+    } catch (error) {
+      applyBookmarkState(id, previousBookmarked)
+      setFeedback({ title: '즐겨찾기를 변경하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+    }
+  }
   const showGallery = () => navigateTo(pageHash('gallery'))
   const showNotices = () => navigateTo(pageHash('notices'))
   const showRegistration = () => navigateTo(pageHash('register'))
@@ -112,10 +532,121 @@ export default function App() {
   const showFavorites = () => navigateTo(pageHash('favorites'))
   const showMyPage = () => navigateTo(pageHash('my-page'))
   const showAdmin = () => navigateTo(pageHash('admin'))
-  const showNotice = (id: number) => navigateTo(noticeHash(id))
+  const showNotice = (notice: Notice) => {
+    if (notice.externalUrl) {
+      window.open(notice.externalUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+    navigateTo(noticeHash(notice.id))
+  }
   const showProject = (id: number) => {
     const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
     navigateTo(projectHash(id, source))
+  }
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setIsLoggedIn(false)
+      setIsAdmin(false)
+      setAuthSubmitting(false)
+      setLoginError('로그인이 만료되었습니다. 다시 로그인해 주세요.')
+      setAuthStep('login')
+      setMyProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      setFavoriteProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      setProfileState({ key: '', data: null, error: '' })
+      setAdminProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      navigateTo(pageHash('gallery'), true)
+    }
+
+    window.addEventListener('auth:expired', handleAuthExpired)
+    return () => window.removeEventListener('auth:expired', handleAuthExpired)
+  }, [navigateTo])
+
+  const openLogin = () => {
+    setLoginError('')
+    setAuthStep('login')
+  }
+
+  const handleLogin = async (credentials: { studentId: string; password: string; remember: boolean }) => {
+    setAuthSubmitting(true)
+    setLoginError('')
+
+    try {
+      const response = await loginApi({ stdNum: credentials.studentId, password: credentials.password })
+      const loginData = response.data
+
+      if (!loginData.loginStatus) {
+        setLoginError(loginData.remainingTries === null
+          ? '존재하지 않는 학번입니다.'
+          : `비밀번호가 일치하지 않습니다. 남은 시도 횟수는 ${loginData.remainingTries}회입니다.`)
+        return
+      }
+
+      if (!loginData.accessToken || !loginData.refreshToken) {
+        throw new ApiError('로그인 토큰을 받지 못했습니다. 다시 시도해 주세요.')
+      }
+
+      const role = loginData.role || 'MEMBER'
+      saveAuthSession({
+        accessToken: loginData.accessToken,
+        refreshToken: loginData.refreshToken,
+        role,
+        studentId: credentials.studentId,
+        newUser: loginData.newUser,
+      }, credentials.remember)
+      setProfile((current) => ({ ...current, studentId: credentials.studentId }))
+      setIsAdmin(hasAdminRole(role))
+
+      if (loginData.newUser) {
+        setIsLoggedIn(false)
+        setSignupError('')
+        setAuthStep('first-login')
+        return
+      }
+
+      setIsLoggedIn(true)
+      setAuthStep('closed')
+      showGallery()
+    } catch (error) {
+      setLoginError(getAuthErrorMessage(error, '로그인 중 오류가 발생했습니다. 다시 시도해 주세요.'))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleSignup = async (firstLoginProfile: { name: string; email: string }) => {
+    setAuthSubmitting(true)
+    setSignupError('')
+
+    try {
+      await signupApi(firstLoginProfile)
+      completeSignup()
+      setProfile((current) => ({ ...current, ...firstLoginProfile }))
+      setIsLoggedIn(true)
+      setAuthStep('closed')
+      setFeedback({ title: '정보 등록이 완료되었습니다.', description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.' })
+      showGallery()
+    } catch (error) {
+      setSignupError(getAuthErrorMessage(error, '회원 정보 등록 중 오류가 발생했습니다. 다시 시도해 주세요.'))
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  const handleLogout = () => {
+    clearAuthSession()
+    setIsLoggedIn(false)
+    setIsAdmin(false)
+    setLoginError('')
+    setSignupError('')
+    setAuthStep('closed')
+    setProfile(initialProfile)
+    setMyProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    setMyProjectDetailState({ projectId: null, project: null, error: '' })
+    setFavoriteProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    setProfileState({ key: '', data: null, error: '' })
+    setAdminProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    showGallery()
   }
 
   const closeProject = () => {
@@ -183,20 +714,47 @@ export default function App() {
     navigateTo(pageHash(currentPage))
   }
 
-  const setProjectApproval = (id: number, approvalStatus: 'approved' | 'rejected') => {
-    setProjects((items) => items.map((project) => project.id === id ? { ...project, approvalStatus } : project))
+  const setProjectApproval = async (id: number, approvalStatus: 'approved' | 'rejected') => {
+    try {
+      await reviewAdminProject(id, approvalStatus === 'approved' ? 'APPROVED' : 'REJECTED')
+      setAdminProjectsState((current) => ({
+        ...current,
+        projects: current.projects.map((project) => project.id === id ? { ...project, approvalStatus } : project),
+      }))
+      setFeedback({ title: approvalStatus === 'approved' ? '작품을 승인했습니다.' : '작품 승인을 반려했습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '작품 심사 상태를 변경하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
   }
 
-  const saveNotice = (id: number | null, data: AdminNoticeData) => {
+  const saveNotice = async (id: number | null, data: AdminNoticeData) => {
     if (id !== null) {
-      setNotices((items) => items.map((notice) => notice.id === id ? { ...notice, ...data } : notice))
-      setFeedback({ title: '공지 수정이 완료되었습니다.', description: '변경한 내용이 공지사항에 반영되었습니다.' })
-      return
+      setFeedback({ title: '공지 수정 API가 아직 제공되지 않았습니다.', description: '백엔드에 수정 API가 추가되면 바로 연결할 수 있습니다.' })
+      return false
     }
 
-    const date = new Date().toISOString().slice(0, 10).replaceAll('-', '.')
-    setNotices((items) => [{ id: Math.max(0, ...items.map((notice) => notice.id)) + 1, date, ...data }, ...items])
-    setFeedback({ title: '공지 등록이 완료되었습니다.', description: '새 공지사항이 목록에 추가되었습니다.' })
+    try {
+      await registerAdminNotice({ title: data.title, contents: data.content }, data.files)
+      setNoticeReloadKey((key) => key + 1)
+      setFeedback({ title: '공지 등록이 완료되었습니다.', description: '새 공지사항이 목록에 추가되었습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '공지를 등록하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
+  }
+
+  const loadAdminProject = useCallback(async (id: number) => {
+    const response = await getProjectDetail(id)
+    const preview = adminProjectsState.projects.find((project) => project.id === id)
+    return { ...mapProjectDetail(response.data), approvalStatus: preview?.approvalStatus ?? 'pending' }
+  }, [adminProjectsState.projects])
+
+  const deleteAdminNotice = async () => {
+    setFeedback({ title: '공지 삭제 API가 아직 제공되지 않았습니다.', description: '백엔드에 삭제 API가 추가되면 바로 연결할 수 있습니다.' })
+    return false
   }
 
   const activeItem = currentPage === 'notices'
@@ -228,13 +786,8 @@ export default function App() {
         onFavoritesClick={showFavorites}
         onMyPageClick={showMyPage}
         onAdminClick={showAdmin}
-        onLoginClick={() => setAuthStep('login')}
-        onLogoutClick={() => {
-          setIsLoggedIn(false)
-          setIsAdmin(false)
-          setAuthStep('closed')
-          showGallery()
-        }}
+        onLoginClick={openLogin}
+        onLogoutClick={handleLogout}
       />
       {editingProject ? (
         <ProjectRegistrationPage
@@ -255,29 +808,83 @@ export default function App() {
           onSubmit={updateProject}
         />
       ) : currentPage === 'notices' ? (
-        selectedNotice ? <NoticeDetail notice={selectedNotice} onBack={showNotices} /> : <NoticePage notices={notices} onOpen={showNotice} />
+        selectedNoticeId !== null ? (
+          selectedNotice
+            ? <NoticeDetail notice={selectedNotice} onBack={showNotices} />
+            : <ApiPageState
+                loading={noticeDetailState.noticeId !== selectedNoticeId}
+                errorMessage={noticeDetailState.noticeId === selectedNoticeId ? noticeDetailState.error : ''}
+                onBack={showNotices}
+                onRetry={() => {
+                  setNoticeDetailState({ noticeId: null, notice: null, error: '' })
+                  setNoticeDetailReloadKey((key) => key + 1)
+                }}
+              />
+        ) : (
+          <NoticePage
+            notices={noticesLoading ? [] : paginatedPublicNotices}
+            page={noticePage}
+            totalPages={publicNoticeTotalPages}
+            loading={noticesLoading}
+            errorMessage={noticesLoading ? '' : publicNoticeState.error}
+            onOpen={showNotice}
+            onSearch={(keyword) => {
+              setNoticeSearchKeyword(keyword)
+              setNoticePage(1)
+            }}
+            onPageChange={setNoticePage}
+            onRetry={() => setNoticeReloadKey((key) => key + 1)}
+          />
+        )
       ) : currentPage === 'register' ? (
         <ProjectRegistrationPage adminMode={isAdmin} onCancel={showGallery} onSubmit={registerProject} />
       ) : currentPage === 'admin' ? (
         <AdminPage
-          projects={projects}
-          notices={notices}
+          projects={adminProjectsState.projects}
+          notices={managedNotices}
+          projectsLoading={adminProjectsLoading}
+          projectsError={adminProjectsState.error}
+          onRetryProjects={() => setAdminProjectsReloadKey((key) => key + 1)}
+          onLoadProject={loadAdminProject}
           onApproveProject={(id) => setProjectApproval(id, 'approved')}
           onRejectProject={(id) => setProjectApproval(id, 'rejected')}
           onSaveNotice={saveNotice}
-          onDeleteNotice={(id) => setNotices((items) => items.filter((notice) => notice.id !== id))}
+          onDeleteNotice={deleteAdminNotice}
         />
       ) : currentPage === 'my-page' ? (
         <MyPage
           profile={profile}
-          myProjects={myProjects}
-          favoriteProjects={favoriteProjects}
-          onProfileChange={(nextProfile) => {
+          myProjects={myPageProjects}
+          favoriteProjects={myPageFavoriteProjects}
+          loading={profileLoading}
+          errorMessage={profileState.error}
+          onRetry={() => setProfileReloadKey((key) => key + 1)}
+          onProfileChange={async (nextProfile) => {
+            await updateMyProfile({ name: nextProfile.name, email: nextProfile.email })
             setProfile(nextProfile)
+            setProfileState((current) => current.data ? {
+              ...current,
+              data: { ...current.data, name: nextProfile.name, email: nextProfile.email },
+            } : current)
             setFeedback({ title: '정보 수정이 완료되었습니다.', description: '변경한 회원 정보가 마이페이지에 반영되었습니다.' })
           }}
           onMyProjectsClick={showMyProjects}
           onFavoritesClick={showFavorites}
+        />
+      ) : selectedProjectId !== null && (currentPage === 'gallery' || currentPage === 'favorites' || currentPage === 'my-projects') && !selectedProject ? (
+        <ApiPageState
+          loading={currentPage === 'my-projects'
+            ? myProjectDetailState.projectId !== selectedProjectId
+            : projectDetailState.projectId !== selectedProjectId}
+          errorMessage={currentPage === 'my-projects'
+            ? myProjectDetailState.projectId === selectedProjectId ? myProjectDetailState.error : ''
+            : projectDetailState.projectId === selectedProjectId ? projectDetailState.error : ''}
+          onBack={closeProject}
+          onRetry={() => {
+            setProjectDetailState({ projectId: null, project: null, error: '' })
+            setMyProjectDetailState({ projectId: null, project: null, error: '' })
+            setProjectDetailReloadKey((key) => key + 1)
+          }}
         />
       ) : selectedProject ? (
         <ProjectDetail
@@ -295,6 +902,9 @@ export default function App() {
           projects={myProjects}
           emptyMessage="등록한 작품이 없습니다."
           groupByApprovalStatus
+          loading={myProjectsLoading}
+          errorMessage={myProjectsState.error}
+          onRetry={() => setMyProjectsReloadKey((key) => key + 1)}
           onBookmark={toggleBookmark}
           onOpen={showProject}
         />
@@ -302,16 +912,30 @@ export default function App() {
         <ProjectCollectionPage
           projects={favoriteProjects}
           emptyMessage="즐겨찾기한 작품이 없습니다."
+          loading={favoritesLoading || profileState.key !== profileQueryKey}
+          errorMessage={profileState.error || favoriteProjectsState.error}
+          onRetry={() => {
+            setProfileReloadKey((key) => key + 1)
+            setFavoritesReloadKey((key) => key + 1)
+          }}
           onBookmark={toggleBookmark}
           onOpen={showProject}
         />
       ) : (
         <main className="page-container flex-1">
-          <Filters key={filters.search} filters={filters} resultCount={filteredProjects.length} onChange={updateFilters} />
+          <Filters key={filters.search} filters={filters} resultCount={galleryState.totalElements} categoryOptions={categoryOptions} onChange={updateFilters} />
 
-          {filteredProjects.length > 0 ? (
+          {galleryLoading ? (
+            <div className="flex min-h-[360px] items-center justify-center text-sm text-neutral-400">작품 목록을 불러오는 중입니다.</div>
+          ) : galleryState.error ? (
+            <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
+              <strong className="text-lg">작품 목록을 불러오지 못했습니다.</strong>
+              <p className="mt-2 text-sm text-red-500">{galleryState.error}</p>
+              <button className="mt-5 rounded-full bg-brand px-5 py-2 text-sm text-white" type="button" onClick={() => setGalleryReloadKey((key) => key + 1)}>다시 시도</button>
+            </div>
+          ) : galleryProjects.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-x-10 md:gap-y-[37px] lg:grid-cols-4">
-              {paginatedProjects.map((project) => <ProjectCard key={project.id} project={project} onBookmark={toggleBookmark} onOpen={showProject} />)}
+              {galleryProjects.map((project) => <ProjectCard key={project.id} project={project} onBookmark={toggleBookmark} onOpen={showProject} />)}
             </div>
           ) : (
             <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
@@ -321,7 +945,7 @@ export default function App() {
             </div>
           )}
 
-          {filteredProjects.length > 0 && (
+          {!galleryLoading && !galleryState.error && galleryProjects.length > 0 && (
             <Pagination
               page={currentHomePage}
               totalPages={homeTotalPages}
@@ -338,38 +962,34 @@ export default function App() {
       <Footer />
       <LoginModal
         open={authStep === 'login'}
-        onClose={() => setAuthStep('closed')}
-        onSubmit={(credentials) => {
-          if (credentials.studentId.trim().toLowerCase() === 'admin') {
-            setIsAdmin(true)
-            setIsLoggedIn(true)
-            setAuthStep('closed')
-            return
-          }
-
-          setIsAdmin(false)
-          if (credentials.studentId.trim()) {
-            setProfile((current) => ({ ...current, studentId: credentials.studentId.trim() }))
-          }
-          if (hasCompletedInitialProfile) {
-            setIsLoggedIn(true)
-            setAuthStep('closed')
-            return
-          }
-
-          setAuthStep('first-login')
+        errorMessage={loginError}
+        submitting={authSubmitting}
+        onInputChange={() => setLoginError('')}
+        onClose={() => {
+          setLoginError('')
+          setAuthStep('closed')
+        }}
+        onSubmit={handleLogin}
+      />
+      <LoginRequiredModal
+        open={loginRequiredOpen}
+        onCancel={() => setLoginRequiredOpen(false)}
+        onConfirm={() => {
+          setLoginRequiredOpen(false)
+          setLoginError('')
+          setAuthStep('login')
         }}
       />
       <FirstLoginModal
         open={authStep === 'first-login'}
-        onClose={() => setAuthStep('closed')}
-        onSubmit={(firstLoginProfile) => {
-          setProfile((current) => ({ ...current, ...firstLoginProfile }))
-          setHasCompletedInitialProfile(true)
-          setIsLoggedIn(true)
+        errorMessage={signupError}
+        submitting={authSubmitting}
+        onInputChange={() => setSignupError('')}
+        onClose={() => {
+          setSignupError('')
           setAuthStep('closed')
-          setFeedback({ title: '정보 등록이 완료되었습니다.', description: '입력한 회원 정보는 마이페이지에서 수정할 수 있습니다.' })
         }}
+        onSubmit={handleSignup}
       />
       <ConfirmModal
         open={pendingDeleteProjectId !== null}
@@ -388,5 +1008,34 @@ export default function App() {
         onClose={() => setFeedback(null)}
       />
     </div>
+  )
+}
+
+function ApiPageState({
+  loading,
+  errorMessage,
+  onBack,
+  onRetry,
+}: {
+  loading: boolean
+  errorMessage: string
+  onBack: () => void
+  onRetry: () => void
+}) {
+  return (
+    <main className="page-container flex min-h-[360px] flex-1 flex-col items-center justify-center text-center">
+      {loading ? (
+        <p className="text-sm text-neutral-400">정보를 불러오는 중입니다.</p>
+      ) : (
+        <>
+          <strong className="text-lg">정보를 불러오지 못했습니다.</strong>
+          <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
+          <div className="mt-5 flex gap-2">
+            <button type="button" className="rounded-full border border-neutral-300 px-5 py-2 text-sm text-neutral-500" onClick={onBack}>목록으로</button>
+            <button type="button" className="rounded-full bg-brand px-5 py-2 text-sm text-white" onClick={onRetry}>다시 시도</button>
+          </div>
+        </>
+      )}
+    </main>
   )
 }

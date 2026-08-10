@@ -17,4 +17,9 @@ export interface GalleryProject {
   bookmarked: boolean
   owned: boolean
   approvalStatus: ProjectApprovalStatus
+  thumbnailUrl?: string
+  additionalImageUrls?: string[]
+  presentationReportUrl?: string
+  descriptionReportUrl?: string
+  projectZipUrl?: string
 }

@@ -12,10 +12,11 @@ export interface FilterState {
 interface FiltersProps {
   filters: FilterState
   resultCount: number
+  categoryOptions?: ProjectCategory[]
   onChange: (filters: FilterState) => void
 }
 
-const categories: ProjectCategory[] = ['웹', '앱', '게임', '임베디드']
+const defaultCategories: ProjectCategory[] = ['웹', '앱', '게임', '임베디드', '보안']
 
 type FilterMenu = 'year' | 'category' | 'sort'
 
@@ -101,7 +102,7 @@ function SelectedFilterChip({ label, onRemove }: SelectedFilterChipProps) {
   )
 }
 
-export function Filters({ filters, resultCount, onChange }: FiltersProps) {
+export function Filters({ filters, resultCount, categoryOptions = defaultCategories, onChange }: FiltersProps) {
   const [searchDraft, setSearchDraft] = useState(filters.search)
   const [openFilter, setOpenFilter] = useState<FilterMenu | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -127,7 +128,7 @@ export function Filters({ filters, resultCount, onChange }: FiltersProps) {
   }, [])
 
   const toggleFilter = (id: FilterMenu) => setOpenFilter((current) => current === id ? null : id)
-  const toggleYear = (value: string) => update('year', filters.year.includes(value) ? filters.year.filter((year) => year !== value) : [...filters.year, value])
+  const toggleYear = (value: string) => update('year', filters.year.includes(value) ? [] : [value])
   const toggleCategory = (value: string) => {
     const category = value as ProjectCategory
     update('category', filters.category.includes(category) ? filters.category.filter((item) => item !== category) : [...filters.category, category])
@@ -146,7 +147,7 @@ export function Filters({ filters, resultCount, onChange }: FiltersProps) {
       <div className="flex h-[20px] min-w-0 flex-1 items-center gap-2 md:h-[32px] md:gap-[14px]">
         <div ref={filterStripRef} className="filter-control-strip">
           <FilterDropdown id="year" label="연도" selectedValues={filters.year} options={['2026', '2025', '2024', '2023']} open={openFilter === 'year'} onToggle={toggleFilter} onSelect={(value) => { toggleYear(value); setOpenFilter(null) }} />
-          <FilterDropdown id="category" label="분야" selectedValues={filters.category} options={categories} open={openFilter === 'category'} onToggle={toggleFilter} onSelect={(value) => { toggleCategory(value); setOpenFilter(null) }} />
+          <FilterDropdown id="category" label="분야" selectedValues={filters.category} options={categoryOptions} open={openFilter === 'category'} onToggle={toggleFilter} onSelect={(value) => { toggleCategory(value); setOpenFilter(null) }} />
           <FilterDropdown id="sort" label="정렬" selectedValues={[filters.sort]} options={['최신순', '이름순']} open={openFilter === 'sort'} showSortIcon onToggle={toggleFilter} onSelect={(value) => { update('sort', value as FilterState['sort']); setOpenFilter(null) }} />
 
           {filters.category.map((category) => <SelectedFilterChip key={`category-${category}`} label={category} onRemove={() => toggleCategory(category)} />)}

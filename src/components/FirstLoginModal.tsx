@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
-interface FirstLoginProfile {
+export interface FirstLoginProfile {
   name: string
   email: string
 }
 
 interface FirstLoginModalProps {
   open: boolean
+  errorMessage?: string
+  submitting?: boolean
   onClose: () => void
-  onSubmit: (profile: FirstLoginProfile) => void
+  onInputChange?: () => void
+  onSubmit: (profile: FirstLoginProfile) => void | Promise<void>
 }
 
-export function FirstLoginModal({ open, onClose, onSubmit }: FirstLoginModalProps) {
+export function FirstLoginModal({ open, errorMessage, submitting = false, onClose, onInputChange, onSubmit }: FirstLoginModalProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
@@ -25,7 +28,7 @@ export function FirstLoginModal({ open, onClose, onSubmit }: FirstLoginModalProp
     nameRef.current?.focus()
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !submitting) onClose()
     }
     document.addEventListener('keydown', closeOnEscape)
 
@@ -33,19 +36,19 @@ export function FirstLoginModal({ open, onClose, onSubmit }: FirstLoginModalProp
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [open, onClose])
+  }, [open, onClose, submitting])
 
   if (!open) return null
 
   return (
-    <div className="login-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="login-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) onClose() }}>
       <section className="login-modal first-login-modal" role="dialog" aria-modal="true" aria-labelledby="first-login-title">
         <div className="flex items-start justify-between">
           <div>
             <h2 id="first-login-title" className="login-modal__title">처음 오셨네요!</h2>
             <p className="first-login-modal__description">바로 시작할 수 있게 몇 가지만 알려주세요</p>
           </div>
-          <button type="button" className="login-modal__close" aria-label="정보 입력 창 닫기" onClick={onClose}>
+          <button type="button" className="login-modal__close" aria-label="정보 입력 창 닫기" disabled={submitting} onClick={onClose}>
             <X aria-hidden="true" />
           </button>
         </div>
@@ -59,15 +62,25 @@ export function FirstLoginModal({ open, onClose, onSubmit }: FirstLoginModalProp
         >
           <label className="login-field">
             <span>이름</span>
-            <input ref={nameRef} type="text" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름을 입력하세요" required />
+            <input ref={nameRef} type="text" autoComplete="name" value={name} disabled={submitting} onChange={(event) => {
+              setName(event.target.value)
+              onInputChange?.()
+            }} placeholder="이름을 입력하세요" required />
           </label>
 
           <label className="login-field">
             <span>이메일</span>
-            <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="pllab1004@gmail.com" required />
+            <input type="email" autoComplete="email" value={email} disabled={submitting} onChange={(event) => {
+              setEmail(event.target.value)
+              onInputChange?.()
+            }} placeholder="pllab1004@gmail.com" required />
           </label>
 
-          <button type="submit" className="login-submit first-login-submit">시작하기</button>
+          {errorMessage && <p className="text-[10px] leading-4 text-red-500" role="alert">{errorMessage}</p>}
+
+          <button type="submit" className="login-submit first-login-submit disabled:cursor-wait disabled:opacity-70" disabled={submitting}>
+            {submitting ? '처리 중...' : '시작하기'}
+          </button>
         </form>
       </section>
     </div>

@@ -14,6 +14,7 @@ export function ProjectCard({ project, onBookmark, onOpen }: ProjectCardProps) {
         <Star size={14} strokeWidth={1.5} className={project.bookmarked ? 'fill-yellow-400 text-yellow-400' : 'text-neutral-400'} />
       </button>
       <button type="button" onClick={() => onOpen(project.id)} className="project-image relative block aspect-[2.14/1] w-full overflow-hidden rounded-t-[10px] bg-slate-200 md:aspect-[1.495/1] md:rounded-[10px]" aria-label={`${project.title} 상세보기`}>
+        {project.thumbnailUrl && <img src={project.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />}
         <span className="absolute inset-0 opacity-0 transition group-hover:opacity-100 bg-gradient-to-t from-brand/10 to-transparent" />
       </button>
       <div className="relative px-2 pb-1.5 pt-[5px] md:px-[2px] md:pb-0 md:pt-1">

@@ -12,7 +12,10 @@ interface MyPageProps {
   profile: UserProfile
   myProjects: GalleryProject[]
   favoriteProjects: GalleryProject[]
-  onProfileChange: (profile: UserProfile) => void
+  loading?: boolean
+  errorMessage?: string
+  onRetry?: () => void
+  onProfileChange: (profile: UserProfile) => Promise<void> | void
   onMyProjectsClick: () => void
   onFavoritesClick: () => void
 }
@@ -52,12 +55,14 @@ function ProfileSection({ title, projects, emptyMessage, onClick }: ProfileSecti
 interface ProfileEditModalProps {
   profile: UserProfile
   onClose: () => void
-  onSave: (profile: UserProfile) => void
+  onSave: (profile: UserProfile) => Promise<void> | void
 }
 
 function ProfileEditModal({ profile, onClose, onSave }: ProfileEditModalProps) {
   const [name, setName] = useState(profile.name)
   const [email, setEmail] = useState(profile.email)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -88,9 +93,17 @@ function ProfileEditModal({ profile, onClose, onSave }: ProfileEditModalProps) {
 
         <form
           className="login-form"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault()
-            onSave({ ...profile, name: name.trim(), email: email.trim() })
+            setSubmitting(true)
+            setErrorMessage('')
+            try {
+              await onSave({ ...profile, name: name.trim(), email: email.trim() })
+            } catch (error) {
+              setErrorMessage(error instanceof Error ? error.message : '정보를 수정하지 못했습니다.')
+            } finally {
+              setSubmitting(false)
+            }
           }}
         >
           <label className="login-field">
@@ -103,7 +116,8 @@ function ProfileEditModal({ profile, onClose, onSave }: ProfileEditModalProps) {
             <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="이메일을 입력하세요" required />
           </label>
 
-          <button type="submit" className="login-submit profile-edit-submit">저장</button>
+          {errorMessage && <p className="text-[10px] text-red-500 md:text-[11px]" role="alert">{errorMessage}</p>}
+          <button type="submit" className="login-submit profile-edit-submit" disabled={submitting}>{submitting ? '저장 중...' : '저장'}</button>
         </form>
       </section>
     </div>
@@ -114,6 +128,9 @@ export function MyPage({
   profile,
   myProjects,
   favoriteProjects,
+  loading = false,
+  errorMessage = '',
+  onRetry,
   onProfileChange,
   onMyProjectsClick,
   onFavoritesClick,
@@ -123,12 +140,18 @@ export function MyPage({
   return (
     <>
       <main className="page-container flex flex-1 flex-col gap-4 pt-5 md:gap-4 md:pt-10">
+        {errorMessage && (
+          <div className="flex items-center justify-between rounded-[8px] bg-red-50 px-3 py-2 text-[9px] text-red-500 md:text-[11px]" role="alert">
+            <span>{errorMessage}</span>
+            {onRetry && <button type="button" className="font-semibold hover:underline" onClick={onRetry}>다시 시도</button>}
+          </div>
+        )}
         <section className="flex min-h-[58px] w-full items-center justify-between rounded-[10px] border border-neutral-200 px-2.5 py-2 md:min-h-[86px] md:rounded-[15px] md:px-5 md:py-4">
           <div className="min-w-0">
-            <h1 className="truncate text-[16px] font-bold leading-tight text-neutral-900 md:text-[20px]">{profile.name}</h1>
-            <p className="mt-1 truncate text-[10px] text-neutral-400 md:text-[14px]">{profile.studentId} · {profile.email}</p>
+            <h1 className="truncate text-[16px] font-bold leading-tight text-neutral-900 md:text-[20px]">{loading ? '정보를 불러오는 중입니다.' : profile.name}</h1>
+            {!loading && <p className="mt-1 truncate text-[10px] text-neutral-400 md:text-[14px]">{profile.studentId} · {profile.email}</p>}
           </div>
-          <button type="button" className="ml-4 flex flex-none items-center gap-0.5 text-[9px] text-brand hover:underline md:gap-1 md:text-[12px]" onClick={() => setEditing(true)}>
+          <button type="button" disabled={loading || Boolean(errorMessage)} className="ml-4 flex flex-none items-center gap-0.5 text-[9px] text-brand hover:underline disabled:text-neutral-300 md:gap-1 md:text-[12px]" onClick={() => setEditing(true)}>
             <Pencil className="h-2.5 w-2.5 md:h-3.5 md:w-3.5" strokeWidth={1.5} aria-hidden="true" />
             수정
           </button>
@@ -152,8 +175,8 @@ export function MyPage({
         <ProfileEditModal
           profile={profile}
           onClose={() => setEditing(false)}
-          onSave={(nextProfile) => {
-            onProfileChange(nextProfile)
+          onSave={async (nextProfile) => {
+            await onProfileChange(nextProfile)
             setEditing(false)
           }}
         />

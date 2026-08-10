@@ -12,3 +12,9 @@
 - TypeScript
 - Vite
 - Tailwind CSS
+
+## API 설정
+
+- 기본 API 주소: `https://api.woojins-house.com`
+- API 명세: [Swagger UI](https://api.woojins-house.com/swagger-ui/index.html)
+- 다른 서버를 사용할 때는 `.env.example`을 참고해 `.env.local`의 `VITE_API_BASE_URL` 값을 변경합니다.

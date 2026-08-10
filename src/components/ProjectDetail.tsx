@@ -19,16 +19,34 @@ interface ProjectDetailProps {
   onReject?: (id: number) => void
 }
 
-const downloads = ['발표 보고서 다운로드', '설명 보고서 다운로드', '프로젝트 파일 다운로드']
-const projectImageNumbers = [1, 2, 3, 4, 5]
 const visibleThumbnailCount = 3
 
-function getCircularImageSequence(startImage: number, count: number) {
-  const startIndex = projectImageNumbers.indexOf(startImage)
+interface ProjectImageItem {
+  id: string
+  label: string
+  url?: string
+}
+
+function getProjectImages(project: GalleryProject): ProjectImageItem[] {
+  if (project.thumbnailUrl) {
+    return [
+      { id: 'thumbnail', label: '대표 이미지', url: project.thumbnailUrl },
+      ...(project.additionalImageUrls ?? []).map((url, index) => ({ id: `additional-${index}`, label: `추가 이미지 ${index + 1}`, url })),
+    ]
+  }
+
+  return Array.from({ length: 5 }, (_, index) => ({
+    id: `placeholder-${index}`,
+    label: index === 1 ? '대표 이미지' : `${index + 1}번 이미지`,
+  }))
+}
+
+function getCircularImageSequence(startIndex: number, count: number, imageCount: number) {
+  if (imageCount === 0) return []
 
   return Array.from(
     { length: count },
-    (_, offset) => projectImageNumbers[(startIndex + offset) % projectImageNumbers.length],
+    (_, offset) => (startIndex + offset) % imageCount,
   )
 }
 
@@ -44,31 +62,38 @@ export function ProjectDetail({
   onApprove,
   onReject,
 }: ProjectDetailProps) {
-  const [activeImage, setActiveImage] = useState(2)
-  const [carouselStartImage, setCarouselStartImage] = useState(2)
+  const projectImages = getProjectImages(project)
+  const initialImageIndex = project.thumbnailUrl ? 0 : Math.min(1, projectImages.length - 1)
+  const [activeImageIndex, setActiveImageIndex] = useState(initialImageIndex)
+  const [carouselStartIndex, setCarouselStartIndex] = useState(initialImageIndex)
   const [slideSteps, setSlideSteps] = useState(0)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [videoModalOpen, setVideoModalOpen] = useState(false)
   const canEdit = viewerRole === 'owner'
   const canDelete = viewerRole === 'owner' || (viewerRole === 'admin' && !reviewMode)
-  const thumbnailTrackImages = getCircularImageSequence(
-    carouselStartImage,
-    visibleThumbnailCount + slideSteps,
-  )
+  const canSlideImages = projectImages.length > visibleThumbnailCount
+  const thumbnailTrackImages = canSlideImages
+    ? getCircularImageSequence(carouselStartIndex, Math.min(visibleThumbnailCount + slideSteps, projectImages.length), projectImages.length)
+    : projectImages.map((_, index) => index)
+  const activeImage = projectImages[activeImageIndex]
+  const downloads = [
+    { label: '발표 보고서 다운로드', url: project.presentationReportUrl },
+    { label: '설명 보고서 다운로드', url: project.descriptionReportUrl },
+    { label: '프로젝트 파일 다운로드', url: project.projectZipUrl },
+  ]
 
-  const selectImage = (imageNumber: number) => {
-    if (imageNumber === activeImage || slideSteps > 0) return
+  const selectImage = (imageIndex: number) => {
+    if (imageIndex === activeImageIndex || slideSteps > 0) return
 
-    const startIndex = projectImageNumbers.indexOf(carouselStartImage)
-    const selectedIndex = projectImageNumbers.indexOf(imageNumber)
-    const steps = (selectedIndex - startIndex + projectImageNumbers.length) % projectImageNumbers.length
+    setActiveImageIndex(imageIndex)
+    if (!canSlideImages) return
+
+    const steps = (imageIndex - carouselStartIndex + projectImages.length) % projectImages.length
 
     if (steps < 1 || steps >= visibleThumbnailCount) return
 
-    setActiveImage(imageNumber)
-
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setCarouselStartImage(imageNumber)
+      setCarouselStartIndex(imageIndex)
       return
     }
 
@@ -77,7 +102,7 @@ export function ProjectDetail({
 
   const finishThumbnailSlide = () => {
     if (slideSteps === 0) return
-    setCarouselStartImage(activeImage)
+    setCarouselStartIndex(activeImageIndex)
     setSlideSteps(0)
   }
 
@@ -135,9 +160,11 @@ export function ProjectDetail({
             >
               <Star className={project.bookmarked ? 'fill-yellow-400 text-yellow-400' : 'text-neutral-400'} size={14} strokeWidth={1.5} />
             </button>
-            <span key={activeImage} className="detail-main-image__content">
-              {activeImage === 2 ? '대표 이미지' : `${activeImage}번 이미지`}
-            </span>
+            {activeImage?.url ? (
+              <img key={activeImage.id} src={activeImage.url} alt={activeImage.label} className="h-full w-full object-contain" />
+            ) : (
+              <span key={activeImage?.id} className="detail-main-image__content">{activeImage?.label}</span>
+            )}
           </div>
 
           <div className="mt-[10px] overflow-hidden md:mt-5">
@@ -150,19 +177,22 @@ export function ProjectDetail({
                 }
               }}
             >
-              {thumbnailTrackImages.map((imageNumber) => (
+              {thumbnailTrackImages.map((imageIndex, trackIndex) => {
+                const image = projectImages[imageIndex]
+                return (
                 <button
                   type="button"
-                  key={imageNumber}
-                  onClick={() => selectImage(imageNumber)}
-                  className={`flex aspect-[1.5/1] items-center justify-center rounded-[9px] bg-slate-200 text-[13px] text-slate-400 md:text-base ${activeImage === imageNumber ? 'border-2 border-blue-600' : 'border-2 border-transparent'}`}
-                  aria-label={`${imageNumber}번 이미지 보기`}
-                  aria-pressed={activeImage === imageNumber}
+                  key={`${image.id}-${trackIndex}`}
+                  onClick={() => selectImage(imageIndex)}
+                  className={`flex aspect-[1.5/1] items-center justify-center overflow-hidden rounded-[9px] bg-slate-200 text-[13px] text-slate-400 md:text-base ${activeImageIndex === imageIndex ? 'border-2 border-blue-600' : 'border-2 border-transparent'}`}
+                  aria-label={`${image.label} 보기`}
+                  aria-pressed={activeImageIndex === imageIndex}
                   disabled={slideSteps > 0}
                 >
-                  {imageNumber}
+                  {image.url ? <img src={image.url} alt="" className="h-full w-full object-cover" loading="lazy" /> : imageIndex + 1}
                 </button>
-              ))}
+                )
+              })}
             </div>
           </div>
         </section>
@@ -200,19 +230,25 @@ export function ProjectDetail({
           </div>
 
           <div className="mt-5 pt-1 md:mt-auto md:pt-3">
-            <button
-              type="button"
-              className="flex h-6 items-center text-[10px] text-neutral-600 md:h-8 md:text-[12px]"
-              aria-haspopup="dialog"
-              onClick={() => setVideoModalOpen(true)}
-            >
-              <Play className="mr-1 h-2.5 w-2.5 fill-neutral-600" aria-hidden="true" />
-              시연 영상 보기
-            </button>
+            {project.demoVideoUrl && (
+              <button
+                type="button"
+                className="flex h-6 items-center text-[10px] text-neutral-600 md:h-8 md:text-[12px]"
+                aria-haspopup="dialog"
+                onClick={() => setVideoModalOpen(true)}
+              >
+                <Play className="mr-1 h-2.5 w-2.5 fill-neutral-600" aria-hidden="true" />
+                시연 영상 보기
+              </button>
+            )}
             <div className="grid grid-cols-3 gap-1.5 md:gap-5">
-              {downloads.map((download) => (
-                <button key={download} type="button" className="h-[30px] rounded-[8px] border border-neutral-300 bg-white px-1 text-[8px] text-neutral-500 transition hover:border-brand hover:text-brand md:h-[45px] md:text-[11px]">
-                  {download}
+              {downloads.map((download) => download.url ? (
+                <a key={download.label} href={download.url} target="_blank" rel="noreferrer" className="flex h-[30px] items-center justify-center rounded-[8px] border border-neutral-300 bg-white px-1 text-center text-[8px] text-neutral-500 transition hover:border-brand hover:text-brand md:h-[45px] md:text-[11px]">
+                  {download.label}
+                </a>
+              ) : (
+                <button key={download.label} type="button" disabled className="h-[30px] rounded-[8px] border border-neutral-200 bg-white px-1 text-[8px] text-neutral-300 md:h-[45px] md:text-[11px]">
+                  {download.label}
                 </button>
               ))}
             </div>

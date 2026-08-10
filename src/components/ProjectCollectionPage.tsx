@@ -23,6 +23,9 @@ interface ProjectCollectionPageProps {
   projects: GalleryProject[]
   emptyMessage: string
   groupByApprovalStatus?: boolean
+  loading?: boolean
+  errorMessage?: string
+  onRetry?: () => void
   onBookmark: (id: number) => void
   onOpen: (id: number) => void
 }
@@ -31,6 +34,9 @@ export function ProjectCollectionPage({
   projects,
   emptyMessage,
   groupByApprovalStatus = false,
+  loading = false,
+  errorMessage = '',
+  onRetry,
   onBookmark,
   onOpen,
 }: ProjectCollectionPageProps) {
@@ -56,7 +62,15 @@ export function ProjectCollectionPage({
 
   return (
     <main className="page-container flex flex-1 flex-col pt-4 md:pt-6">
-      {projects.length > 0 ? (
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center pb-20 text-center text-[11px] text-neutral-400 md:text-[13px]">작품 목록을 불러오는 중입니다.</div>
+      ) : errorMessage ? (
+        <div className="flex flex-1 flex-col items-center justify-center pb-20 text-center">
+          <strong className="text-[12px] text-neutral-700 md:text-[14px]">작품 목록을 불러오지 못했습니다.</strong>
+          <p className="mt-1.5 text-[10px] text-red-500 md:text-[12px]">{errorMessage}</p>
+          {onRetry && <button type="button" className="mt-4 rounded-full bg-brand px-4 py-1.5 text-[10px] text-white md:text-[12px]" onClick={onRetry}>다시 시도</button>}
+        </div>
+      ) : projects.length > 0 ? (
         groupByApprovalStatus ? (
           <div className="flex flex-col gap-8 md:gap-10">
             {visibleApprovalGroups.map((group) => (

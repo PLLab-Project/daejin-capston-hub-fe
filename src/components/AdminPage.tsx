@@ -15,15 +15,20 @@ export interface AdminNoticeData {
   title: string
   content: string
   attachmentName: string
+  files: File[]
 }
 
 interface AdminPageProps {
   projects: GalleryProject[]
   notices: Notice[]
-  onApproveProject: (id: number) => void
-  onRejectProject: (id: number) => void
-  onSaveNotice: (id: number | null, data: AdminNoticeData) => void
-  onDeleteNotice: (id: number) => void
+  projectsLoading?: boolean
+  projectsError?: string
+  onRetryProjects?: () => void
+  onLoadProject?: (id: number) => Promise<GalleryProject>
+  onApproveProject: (id: number) => Promise<boolean> | boolean
+  onRejectProject: (id: number) => Promise<boolean> | boolean
+  onSaveNotice: (id: number | null, data: AdminNoticeData) => Promise<boolean> | boolean
+  onDeleteNotice: (id: number) => Promise<boolean> | boolean
 }
 
 type MemberRole = 'admin' | 'general'
@@ -89,6 +94,10 @@ function readAdminRoute(): AdminRouteState {
 export function AdminPage({
   projects,
   notices,
+  projectsLoading = false,
+  projectsError = '',
+  onRetryProjects,
+  onLoadProject,
   onApproveProject,
   onRejectProject,
   onSaveNotice,
@@ -105,8 +114,10 @@ export function AdminPage({
   const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState<number | null>(null)
   const [pendingRejectProjectId, setPendingRejectProjectId] = useState<number | null>(null)
   const [memberItems, setMemberItems] = useState(initialMembers)
+  const [loadedReviewProject, setLoadedReviewProject] = useState<GalleryProject | null>(null)
+  const [reviewError, setReviewError] = useState('')
   const [page, setPage] = useState(1)
-  const reviewProject = projects.find((project) => project.id === reviewProjectId)
+  const reviewProject = loadedReviewProject ?? projects.find((project) => project.id === reviewProjectId)
   const viewNotice = notices.find((notice) => notice.id === viewNoticeId)
   const noticeEditor = noticeEditorId === 'new' ? 'new' : notices.find((notice) => notice.id === noticeEditorId) ?? null
 
@@ -117,6 +128,8 @@ export function AdminPage({
       setReviewProjectId(route.projectId)
       setViewNoticeId(route.noticeId)
       setNoticeEditorId(route.noticeEditor)
+      setLoadedReviewProject(null)
+      setReviewError('')
       setSearchDraft('')
       setSearchKeyword('')
       setPage(1)
@@ -126,6 +139,21 @@ export function AdminPage({
     window.addEventListener('hashchange', syncAdminRoute)
     return () => window.removeEventListener('hashchange', syncAdminRoute)
   }, [])
+
+  useEffect(() => {
+    if (reviewProjectId === null || !onLoadProject) return
+
+    let cancelled = false
+    onLoadProject(reviewProjectId)
+      .then((project) => {
+        if (!cancelled) setLoadedReviewProject(project)
+      })
+      .catch((error) => {
+        if (!cancelled) setReviewError(error instanceof Error ? error.message : '작품 상세정보를 불러오지 못했습니다.')
+      })
+
+    return () => { cancelled = true }
+  }, [onLoadProject, reviewProjectId])
 
   const filteredProjects = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
@@ -150,6 +178,22 @@ export function AdminPage({
   const paginatedMembers = filteredMembers.slice(pageStart, pageStart + pageSize)
   const paginatedNotices = filteredNotices.slice(pageStart, pageStart + pageSize)
 
+  if (reviewProjectId !== null && (!loadedReviewProject || reviewError)) {
+    return (
+      <main className="page-container flex min-h-[360px] flex-1 flex-col items-center justify-center text-center">
+        {!reviewError ? (
+          <p className="text-sm text-neutral-400">작품 상세정보를 불러오는 중입니다.</p>
+        ) : (
+          <>
+            <strong className="text-lg">작품 상세정보를 불러오지 못했습니다.</strong>
+            <p className="mt-2 text-sm text-red-500">{reviewError}</p>
+            <button type="button" className="mt-5 rounded-full border border-neutral-300 px-5 py-2 text-sm text-neutral-500" onClick={() => navigateHash(adminHash('projects'))}>목록으로</button>
+          </>
+        )}
+      </main>
+    )
+  }
+
   if (reviewProject) {
     return (
       <>
@@ -160,9 +204,8 @@ export function AdminPage({
           backLabel="작품 관리"
           onBack={() => navigateHash(adminHash('projects'))}
           onBookmark={() => undefined}
-          onApprove={(id) => {
-            onApproveProject(id)
-            navigateHash(adminHash('projects'))
+          onApprove={async (id) => {
+            if (await onApproveProject(id)) navigateHash(adminHash('projects'))
           }}
           onReject={setPendingRejectProjectId}
         />
@@ -172,10 +215,11 @@ export function AdminPage({
           description="반려된 작품은 내 작품에서 승인 거부 상태로 표시됩니다."
           confirmLabel="반려"
           onCancel={() => setPendingRejectProjectId(null)}
-          onConfirm={() => {
-            if (pendingRejectProjectId !== null) onRejectProject(pendingRejectProjectId)
-            setPendingRejectProjectId(null)
-            navigateHash(adminHash('projects'))
+          onConfirm={async () => {
+            if (pendingRejectProjectId !== null && await onRejectProject(pendingRejectProjectId)) {
+              setPendingRejectProjectId(null)
+              navigateHash(adminHash('projects'))
+            }
           }}
         />
       </>
@@ -187,9 +231,9 @@ export function AdminPage({
       <AdminNoticeEditor
         initialNotice={noticeEditor === 'new' ? undefined : noticeEditor}
         onCancel={() => navigateHash(adminHash('notices'))}
-        onSubmit={(data) => {
-          onSaveNotice(noticeEditor === 'new' ? null : noticeEditor.id, data)
-          navigateHash(adminHash('notices'))
+        onSubmit={async (data) => {
+          const saved = await onSaveNotice(noticeEditor === 'new' ? null : noticeEditor.id, data)
+          if (saved) navigateHash(adminHash('notices'))
         }}
       />
     )
@@ -235,7 +279,13 @@ export function AdminPage({
         </div>
 
         <div className="md:mt-[15px]">
-          {activeTab === 'projects' && <ProjectManagementTable projects={paginatedProjects} onOpen={(id) => navigateHash(`#/admin/projects/${id}`)} />}
+          {activeTab === 'projects' && (
+            projectsLoading
+              ? <AdminStateRow message="작품 목록을 불러오는 중입니다." />
+              : projectsError
+                ? <AdminStateRow message={projectsError} actionLabel="다시 시도" onAction={onRetryProjects} />
+                : <ProjectManagementTable projects={paginatedProjects} onOpen={(id) => navigateHash(`#/admin/projects/${id}`)} />
+          )}
           {activeTab === 'members' && (
             <MemberManagementTable
               memberItems={paginatedMembers}
@@ -262,9 +312,8 @@ export function AdminPage({
         description="삭제한 공지사항과 첨부파일은 복구할 수 없습니다."
         confirmLabel="삭제"
         onCancel={() => setPendingDeleteNoticeId(null)}
-        onConfirm={() => {
-          if (pendingDeleteNoticeId !== null) onDeleteNotice(pendingDeleteNoticeId)
-          setPendingDeleteNoticeId(null)
+        onConfirm={async () => {
+          if (pendingDeleteNoticeId !== null && await onDeleteNotice(pendingDeleteNoticeId)) setPendingDeleteNoticeId(null)
         }}
       />
       <ConfirmModal
@@ -343,8 +392,18 @@ function EmptyRow() {
   return <div className="flex h-20 items-center justify-center border-b border-neutral-200 text-[10px] text-neutral-400 md:text-[12px]">검색 결과가 없습니다.</div>
 }
 
-function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotice?: Notice; onCancel: () => void; onSubmit: (data: AdminNoticeData) => void }) {
-  const [attachmentName, setAttachmentName] = useState(initialNotice?.attachmentName ?? '')
+function AdminStateRow({ message, actionLabel, onAction }: { message: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="flex h-24 flex-col items-center justify-center border-y border-neutral-200 text-[10px] text-neutral-400 md:text-[12px]">
+      <span>{message}</span>
+      {actionLabel && onAction && <button type="button" className="mt-2 text-brand hover:underline" onClick={onAction}>{actionLabel}</button>}
+    </div>
+  )
+}
+
+function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotice?: Notice; onCancel: () => void; onSubmit: (data: AdminNoticeData) => Promise<void> | void }) {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const attachmentName = selectedFiles.map((file) => file.name).join(', ') || initialNotice?.attachmentName || ''
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -353,6 +412,7 @@ function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotic
       title: String(formData.get('title') ?? '').trim(),
       content: String(formData.get('content') ?? '').trim(),
       attachmentName,
+      files: selectedFiles,
     })
   }
 
@@ -362,7 +422,7 @@ function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotic
       <form className="mt-4 space-y-4" onSubmit={submit}>
         <label className="block"><span className="mb-2 block text-[10px] font-semibold md:text-[12px]">제목</span><input name="title" defaultValue={initialNotice?.title} className="h-[34px] w-full rounded-[5px] border border-neutral-300 px-3 text-[10px] outline-none focus:border-brand md:h-11 md:px-4 md:text-[12px]" placeholder="공지 제목을 입력하세요" required /></label>
         <label className="block"><span className="mb-2 block text-[10px] font-semibold md:text-[12px]">내용</span><textarea name="content" defaultValue={initialNotice?.content} className="h-[310px] w-full resize-none rounded-[5px] border border-neutral-300 p-3 text-[10px] leading-5 outline-none focus:border-brand md:h-[480px] md:p-4 md:text-[12px] md:leading-6" placeholder="공지 내용을 입력하세요" required /></label>
-        <label className="block"><span className="mb-2 block text-[10px] font-semibold md:text-[12px]">첨부 파일</span><span className="flex h-11 w-full cursor-pointer items-center justify-center rounded-[5px] border border-dashed border-neutral-300 bg-slate-50 text-[10px] text-neutral-400 md:text-[12px]">{attachmentName || '+'}<input type="file" className="sr-only" onChange={(event) => setAttachmentName(event.target.files?.[0]?.name ?? '')} /></span></label>
+        <label className="block"><span className="mb-2 block text-[10px] font-semibold md:text-[12px]">첨부 파일</span><span className="flex h-11 w-full cursor-pointer items-center justify-center rounded-[5px] border border-dashed border-neutral-300 bg-slate-50 px-3 text-[10px] text-neutral-400 md:text-[12px]"><span className="truncate">{attachmentName || '+'}</span><input type="file" multiple className="sr-only" onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))} /></span></label>
         <div className="flex justify-between pt-1"><button type="button" className="h-10 w-[100px] rounded-[7px] border border-neutral-300 text-[11px] text-neutral-500 md:h-11 md:w-40 md:text-[13px]" onClick={onCancel}>취소</button><button type="submit" className="h-10 w-[150px] rounded-[7px] bg-brand text-[11px] font-semibold text-white md:h-11 md:w-64 md:text-[13px]">{initialNotice ? '수정 완료' : '등록 완료'}</button></div>
       </form>
     </main>
