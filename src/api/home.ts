@@ -48,7 +48,7 @@ export interface NoticePreviewResponse {
   title: string
   createdAt: string
   link: string | null
-  noticeType: 'DAEJIN' | 'SERVICE'
+  noticeType: 'DAEJIN' | 'DEAJIN' | 'SERVICE'
   hasFile: boolean
 }
 

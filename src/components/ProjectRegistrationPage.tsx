@@ -211,7 +211,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
           <div className="space-y-3 md:space-y-4">
             <FileUploadField label="발표 보고서 *" accept=".ppt,.pptx" hint="PPT · 50MB" boxClassName="h-[30px] md:h-11" onFileChange={setPresentationReport} />
             <FileUploadField label="설명 보고서 *" accept=".hwp" hint="HWP · 50MB" boxClassName="h-[30px] md:h-11" onFileChange={setDescriptionReport} />
-            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 100MB" boxClassName="h-[30px] md:h-11" onFileChange={setProjectZip} />
+            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 500MB" boxClassName="h-[30px] md:h-11" onFileChange={setProjectZip} />
           </div>
         </div>
 
@@ -449,7 +449,7 @@ function FileUploadField({
   const [dragging, setDragging] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const isArchive = accept.includes('.zip')
-  const maxFileSize = (isArchive ? 100 : 50) * 1024 * 1024
+  const maxFileSize = (isArchive ? 500 : 50) * 1024 * 1024
   const FileIcon = isArchive ? Archive : FileText
   const acceptedExtensions = accept.split(',').map((extension) => extension.trim().toLowerCase())
 
@@ -462,7 +462,7 @@ function FileUploadField({
       return
     }
     if (file.size > maxFileSize) {
-      setErrorMessage(`${isArchive ? '압축파일은 100MB' : '보고서는 50MB'} 이하만 업로드할 수 있습니다.`)
+      setErrorMessage(`${isArchive ? '압축파일은 500MB' : '보고서는 50MB'} 이하만 업로드할 수 있습니다.`)
       return
     }
 

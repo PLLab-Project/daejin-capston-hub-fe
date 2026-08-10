@@ -11,6 +11,6 @@ export interface Notice {
   attachmentName: string
   attachments?: NoticeAttachment[]
   externalUrl?: string
-  noticeType?: 'DAEJIN' | 'SERVICE'
+  noticeType?: 'DAEJIN' | 'DEAJIN' | 'SERVICE'
   hasFile?: boolean
 }

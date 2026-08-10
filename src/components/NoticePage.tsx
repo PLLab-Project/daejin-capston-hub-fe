@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Paperclip, Search } from 'lucide-react'
 import { useState } from 'react'
 import type { Notice } from '../types/notice'
 import { Pagination } from './Pagination'
@@ -69,8 +69,14 @@ export function NoticePage({
             {!loading && !errorMessage && notices.map((notice) => (
               <tr key={notice.externalUrl ?? notice.id} className="h-[25px] border-b border-neutral-200 text-[10px] text-neutral-700 transition-colors hover:bg-neutral-50 md:h-[32px] md:text-[12px]">
                 <td className="truncate px-2.5 md:px-5">
-                  <button type="button" className="block w-full truncate text-left hover:text-brand hover:underline" onClick={() => onOpen(notice)}>
-                    {notice.title}
+                  <button type="button" className="flex w-full min-w-0 items-center text-left hover:text-brand hover:underline" onClick={() => onOpen(notice)}>
+                    <span className="truncate">{notice.title}</span>
+                    {notice.hasFile && (
+                      <>
+                        <Paperclip className="ml-1 h-2.5 w-2.5 flex-none text-neutral-400 md:h-3 md:w-3" aria-hidden="true" />
+                        <span className="sr-only">첨부파일 있음</span>
+                      </>
+                    )}
                   </button>
                 </td>
                 <td className="px-1 text-[8px] text-neutral-400 md:px-0 md:text-[10px]">{notice.date}</td>

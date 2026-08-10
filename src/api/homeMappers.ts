@@ -82,7 +82,8 @@ function createExternalNoticeId(link: string) {
 }
 
 export function mapNoticePreview(notice: NoticePreviewResponse): Notice {
-  const externalUrl = notice.noticeType === 'DAEJIN' ? notice.link || undefined : undefined
+  const isDaejinNotice = notice.noticeId === null || notice.noticeType === 'DAEJIN' || notice.noticeType === 'DEAJIN'
+  const externalUrl = isDaejinNotice ? notice.link || undefined : undefined
 
   return {
     id: notice.noticeId ?? createExternalNoticeId(notice.link || notice.title),

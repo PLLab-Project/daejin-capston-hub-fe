@@ -753,6 +753,11 @@ export default function App() {
     return { ...mapProjectDetail(response.data), approvalStatus: preview?.approvalStatus ?? 'pending' }
   }, [adminProjectsState.projects])
 
+  const loadAdminNotice = useCallback(async (id: number) => {
+    const response = await getNoticeDetail(id)
+    return mapNoticeDetail(response.data)
+  }, [])
+
   const deleteAdminNotice = async () => {
     setFeedback({ title: '공지 삭제 API가 아직 제공되지 않았습니다.', description: '백엔드에 삭제 API가 추가되면 바로 연결할 수 있습니다.' })
     return false
@@ -848,6 +853,7 @@ export default function App() {
           projectsError={adminProjectsState.error}
           onRetryProjects={() => setAdminProjectsReloadKey((key) => key + 1)}
           onLoadProject={loadAdminProject}
+          onLoadNotice={loadAdminNotice}
           onApproveProject={(id) => setProjectApproval(id, 'approved')}
           onRejectProject={(id) => setProjectApproval(id, 'rejected')}
           onSaveNotice={saveNotice}

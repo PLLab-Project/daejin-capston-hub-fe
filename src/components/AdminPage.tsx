@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from 'lucide-react'
+import { ChevronDown, Paperclip, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Notice } from '../types/notice'
@@ -25,6 +25,7 @@ interface AdminPageProps {
   projectsError?: string
   onRetryProjects?: () => void
   onLoadProject?: (id: number) => Promise<GalleryProject>
+  onLoadNotice?: (id: number) => Promise<Notice>
   onApproveProject: (id: number) => Promise<boolean> | boolean
   onRejectProject: (id: number) => Promise<boolean> | boolean
   onSaveNotice: (id: number | null, data: AdminNoticeData) => Promise<boolean> | boolean
@@ -98,6 +99,7 @@ export function AdminPage({
   projectsError = '',
   onRetryProjects,
   onLoadProject,
+  onLoadNotice,
   onApproveProject,
   onRejectProject,
   onSaveNotice,
@@ -116,10 +118,15 @@ export function AdminPage({
   const [memberItems, setMemberItems] = useState(initialMembers)
   const [loadedReviewProject, setLoadedReviewProject] = useState<GalleryProject | null>(null)
   const [reviewError, setReviewError] = useState('')
+  const [loadedNotice, setLoadedNotice] = useState<Notice | null>(null)
+  const [noticeLoadError, setNoticeLoadError] = useState('')
   const [page, setPage] = useState(1)
   const reviewProject = loadedReviewProject ?? projects.find((project) => project.id === reviewProjectId)
-  const viewNotice = notices.find((notice) => notice.id === viewNoticeId)
-  const noticeEditor = noticeEditorId === 'new' ? 'new' : notices.find((notice) => notice.id === noticeEditorId) ?? null
+  const requestedNoticeId = viewNoticeId ?? (typeof noticeEditorId === 'number' ? noticeEditorId : null)
+  const listedNotice = requestedNoticeId === null ? null : notices.find((notice) => notice.id === requestedNoticeId) ?? null
+  const routeNotice = loadedNotice?.id === requestedNoticeId ? loadedNotice : onLoadNotice ? null : listedNotice
+  const viewNotice = viewNoticeId === null ? null : routeNotice
+  const noticeEditor = noticeEditorId === 'new' ? 'new' : typeof noticeEditorId === 'number' ? routeNotice : null
 
   useEffect(() => {
     const syncAdminRoute = () => {
@@ -130,6 +137,8 @@ export function AdminPage({
       setNoticeEditorId(route.noticeEditor)
       setLoadedReviewProject(null)
       setReviewError('')
+      setLoadedNotice(null)
+      setNoticeLoadError('')
       setSearchDraft('')
       setSearchKeyword('')
       setPage(1)
@@ -154,6 +163,21 @@ export function AdminPage({
 
     return () => { cancelled = true }
   }, [onLoadProject, reviewProjectId])
+
+  useEffect(() => {
+    if (requestedNoticeId === null || !onLoadNotice) return
+
+    let cancelled = false
+    onLoadNotice(requestedNoticeId)
+      .then((notice) => {
+        if (!cancelled) setLoadedNotice(notice)
+      })
+      .catch((error) => {
+        if (!cancelled) setNoticeLoadError(error instanceof Error ? error.message : '공지사항 상세정보를 불러오지 못했습니다.')
+      })
+
+    return () => { cancelled = true }
+  }, [onLoadNotice, requestedNoticeId])
 
   const filteredProjects = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
@@ -223,6 +247,18 @@ export function AdminPage({
           }}
         />
       </>
+    )
+  }
+
+  if (requestedNoticeId !== null && !routeNotice) {
+    return (
+      <main className="page-container flex flex-1 flex-col pt-3 md:pt-[17px]">
+        <AdminStateRow
+          message={noticeLoadError || '공지사항 상세정보를 불러오는 중입니다.'}
+          actionLabel={noticeLoadError ? '목록으로' : undefined}
+          onAction={noticeLoadError ? () => navigateHash(adminHash('notices')) : undefined}
+        />
+      </main>
     )
   }
 
@@ -379,7 +415,10 @@ function NoticeManagementTable({ notices, onOpen, onEdit, onDelete }: { notices:
       <div className="grid h-[27px] grid-cols-[1fr_75px_64px] items-center border-y border-neutral-200 bg-slate-50 px-3 text-neutral-400 md:h-[32px] md:grid-cols-[1fr_132px_100px] md:px-5"><span>제목</span><span>날짜</span><span /></div>
       {notices.map((notice) => (
         <div key={notice.id} className="grid min-h-[29px] grid-cols-[1fr_75px_64px] items-center border-b border-neutral-200 px-3 text-neutral-700 md:min-h-[32px] md:grid-cols-[1fr_132px_100px] md:px-5">
-          <button type="button" className="truncate text-left hover:text-brand hover:underline" onClick={() => onOpen(notice.id)}>{notice.title}</button><span className="text-neutral-400">{notice.date}</span>
+          <button type="button" className="flex min-w-0 items-center text-left hover:text-brand hover:underline" onClick={() => onOpen(notice.id)}>
+            <span className="truncate">{notice.title}</span>
+            {notice.hasFile && <Paperclip className="ml-1 h-2.5 w-2.5 flex-none text-neutral-400 md:h-3 md:w-3" aria-label="첨부파일 있음" />}
+          </button><span className="text-neutral-400">{notice.date}</span>
           <span className="flex justify-end gap-3"><button type="button" className="text-neutral-500 hover:text-brand" onClick={() => onEdit(notice)}>수정</button><button type="button" className="text-red-400 hover:text-red-500" onClick={() => onDelete(notice.id)}>삭제</button></span>
         </div>
       ))}
@@ -403,7 +442,8 @@ function AdminStateRow({ message, actionLabel, onAction }: { message: string; ac
 
 function AdminNoticeEditor({ initialNotice, onCancel, onSubmit }: { initialNotice?: Notice; onCancel: () => void; onSubmit: (data: AdminNoticeData) => Promise<void> | void }) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const attachmentName = selectedFiles.map((file) => file.name).join(', ') || initialNotice?.attachmentName || ''
+  const existingAttachmentNames = initialNotice?.attachments?.map((attachment) => attachment.originalName).join(', ') || initialNotice?.attachmentName || ''
+  const attachmentName = selectedFiles.map((file) => file.name).join(', ') || existingAttachmentNames
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
