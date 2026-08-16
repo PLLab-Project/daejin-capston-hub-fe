@@ -847,6 +847,11 @@ export default function App() {
             techStack: editingProject.techStack.join(', '),
             description: editingProject.longDescription,
             demoVideoUrl: editingProject.demoVideoUrl,
+            thumbnailUrl: editingProject.thumbnailUrl,
+            additionalImageUrls: editingProject.additionalImageUrls,
+            presentationReportUrl: editingProject.presentationReportUrl,
+            descriptionReportUrl: editingProject.descriptionReportUrl,
+            projectZipUrl: editingProject.projectZipUrl,
             additionalImages: [],
           }}
           onCancel={() => {

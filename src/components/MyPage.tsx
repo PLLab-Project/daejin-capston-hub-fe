@@ -159,7 +159,7 @@ export function MyPage({
 
         <ProfileSection
           title="내 작품"
-          projects={myProjects.slice(0, 1)}
+          projects={myProjects}
           emptyMessage="등록한 작품이 없습니다."
           onClick={onMyProjectsClick}
         />
