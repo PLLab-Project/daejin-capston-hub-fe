@@ -36,3 +36,20 @@ export function registerAdminNotice(request: RegisterNoticeRequest, files: File[
     body: formData,
   })
 }
+
+export function modifyAdminNotice(noticeId: number, request: RegisterNoticeRequest, files: File[]) {
+  const formData = new FormData()
+  formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
+  files.forEach((file) => formData.append('files', file))
+
+  return apiRequest<null>(`/admin/notice/modify/${noticeId}`, {
+    method: 'PATCH',
+    body: formData,
+  })
+}
+
+export function deleteAdminNotice(noticeId: number) {
+  return apiRequest<null>(`/admin/notice/${noticeId}`, {
+    method: 'DELETE',
+  })
+}

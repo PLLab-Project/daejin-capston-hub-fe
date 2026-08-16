@@ -98,6 +98,9 @@ export interface RegisterProjectFiles {
   projectZip: File
 }
 
+export type ModifyProjectRequest = RegisterProjectRequest
+export type ModifyProjectFiles = RegisterProjectFiles
+
 function createQuery(params: Record<string, string | number | Array<string | number> | undefined>) {
   const query = new URLSearchParams()
 
@@ -141,6 +144,21 @@ export function registerProject(request: RegisterProjectRequest, files: Register
 
   return apiRequest<number>('/home/project', {
     method: 'POST',
+    body: formData,
+  })
+}
+
+export function modifyProject(projectId: number, request: ModifyProjectRequest, files: ModifyProjectFiles) {
+  const formData = new FormData()
+  formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
+  formData.append('thumbnail', files.thumbnail)
+  files.addImage.forEach((file) => formData.append('addImage', file))
+  formData.append('presentationReport', files.presentationReport)
+  formData.append('descriptionReport', files.descriptionReport)
+  formData.append('projectZip', files.projectZip)
+
+  return apiRequest<number>(`/home/modify/${projectId}`, {
+    method: 'PATCH',
     body: formData,
   })
 }

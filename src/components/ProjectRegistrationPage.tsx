@@ -69,8 +69,8 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
       return
     }
 
-    if (!isEditing && (!thumbnailFiles[0] || !presentationReport || !descriptionReport || !projectZip)) {
-      setSubmitError('대표 이미지, 발표 보고서, 설명 보고서, 프로젝트 압축파일을 모두 등록해 주세요.')
+    if (!thumbnailFiles[0] || !presentationReport || !descriptionReport || !projectZip) {
+      setSubmitError(`${isEditing ? '수정할' : '등록할'} 대표 이미지, 발표 보고서, 설명 보고서, 프로젝트 압축파일을 모두 등록해 주세요.`)
       return
     }
 

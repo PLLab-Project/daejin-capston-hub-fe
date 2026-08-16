@@ -17,9 +17,9 @@ import { StatusModal } from './components/StatusModal'
 import { LoginRequiredModal } from './components/LoginRequiredModal'
 import { login as loginApi, signup as signupApi } from './api/auth'
 import { toggleProjectBookmark } from './api/bookmark'
-import { getAdminProjects, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
+import { deleteAdminNotice as deleteAdminNoticeApi, getAdminProjects, modifyAdminNotice, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
 import { ApiError } from './api/client'
-import { getCategories, getNoticeDetail, getProjectDetail, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
+import { getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
 import { getMyProjectDetail, getMyProjectPreviews } from './api/myProjects'
 import { getMyProfile, updateMyProfile, type MypageProjectResponse, type MypageResponse } from './api/mypage'
@@ -707,21 +707,34 @@ export default function App() {
     showMyProjects()
   }
 
-  const updateProject = (data: ProjectRegistrationData) => {
+  const updateProject = async (data: ProjectRegistrationData) => {
     if (editingProjectId === null) return
     const updatedProjectId = editingProjectId
+    const categoryId = categoryIdByName.get(data.category)
+    if (categoryId === undefined) throw new Error('선택한 분야 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.')
+    if (!data.thumbnail || !data.presentationReport || !data.descriptionReport || !data.projectZip) {
+      throw new Error('작품 수정에 필요한 파일을 모두 등록해 주세요.')
+    }
 
-    setProjects((items) => items.map((project) => project.id === updatedProjectId ? {
-      ...project,
+    await modifyProjectApi(updatedProjectId, {
       title: data.title,
-      description: data.summary,
-      detailSummary: data.summary,
-      field: data.category,
-      category: data.category,
-      techStack: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
-      longDescription: data.description,
-      demoVideoUrl: data.demoVideoUrl || project.demoVideoUrl,
-    } : project))
+      summary: data.summary,
+      categoryId,
+      techStacks: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+      description: data.description,
+      demoVideoUrl: data.demoVideoUrl,
+    }, {
+      thumbnail: data.thumbnail,
+      addImage: data.additionalImages,
+      presentationReport: data.presentationReport,
+      descriptionReport: data.descriptionReport,
+      projectZip: data.projectZip,
+    })
+
+    setMyProjectsReloadKey((key) => key + 1)
+    setGalleryReloadKey((key) => key + 1)
+    setProjectDetailReloadKey((key) => key + 1)
+    setMyProjectDetailState({ projectId: null, project: null, error: '' })
     setFeedback({ title: '작품 수정이 완료되었습니다.', description: '변경한 내용이 작품 상세정보에 반영되었습니다.' })
     const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
     navigateTo(projectHash(updatedProjectId, source))
@@ -749,18 +762,20 @@ export default function App() {
   }
 
   const saveNotice = async (id: number | null, data: AdminNoticeData) => {
-    if (id !== null) {
-      setFeedback({ title: '공지 수정 API가 아직 제공되지 않았습니다.', description: '백엔드에 수정 API가 추가되면 바로 연결할 수 있습니다.' })
-      return false
-    }
-
     try {
-      await registerAdminNotice({ title: data.title, contents: data.content }, data.files)
+      if (id === null) {
+        await registerAdminNotice({ title: data.title, contents: data.content }, data.files)
+      } else {
+        await modifyAdminNotice(id, { title: data.title, contents: data.content }, data.files)
+      }
       setNoticeReloadKey((key) => key + 1)
-      setFeedback({ title: '공지 등록이 완료되었습니다.', description: '새 공지사항이 목록에 추가되었습니다.' })
+      setNoticeDetailState({ noticeId: null, notice: null, error: '' })
+      setFeedback(id === null
+        ? { title: '공지 등록이 완료되었습니다.', description: '새 공지사항이 목록에 추가되었습니다.' }
+        : { title: '공지 수정이 완료되었습니다.', description: '변경한 내용이 공지사항에 반영되었습니다.' })
       return true
     } catch (error) {
-      setFeedback({ title: '공지를 등록하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      setFeedback({ title: id === null ? '공지를 등록하지 못했습니다.' : '공지를 수정하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
       return false
     }
   }
@@ -776,9 +791,17 @@ export default function App() {
     return mapNoticeDetail(response.data)
   }, [])
 
-  const deleteAdminNotice = async () => {
-    setFeedback({ title: '공지 삭제 API가 아직 제공되지 않았습니다.', description: '백엔드에 삭제 API가 추가되면 바로 연결할 수 있습니다.' })
-    return false
+  const deleteAdminNotice = async (id: number) => {
+    try {
+      await deleteAdminNoticeApi(id)
+      setNoticeReloadKey((key) => key + 1)
+      setNoticeDetailState((current) => current.noticeId === id ? { noticeId: null, notice: null, error: '' } : current)
+      setFeedback({ title: '공지가 삭제되었습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '공지를 삭제하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
   }
 
   const activeItem = currentPage === 'notices'
