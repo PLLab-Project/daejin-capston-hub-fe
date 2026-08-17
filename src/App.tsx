@@ -17,7 +17,7 @@ import { StatusModal } from './components/StatusModal'
 import { LoginRequiredModal } from './components/LoginRequiredModal'
 import { login as loginApi, signup as signupApi } from './api/auth'
 import { toggleProjectBookmark } from './api/bookmark'
-import { deleteAdminNotice as deleteAdminNoticeApi, getAdminProjects, modifyAdminNotice, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
+import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, getAdminProjects, modifyAdminNotice, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
 import { ApiError } from './api/client'
 import { getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
@@ -740,7 +740,8 @@ export default function App() {
     navigateTo(projectHash(updatedProjectId, source))
   }
 
-  const deleteProject = (id: number) => {
+  const deleteProject = async (id: number) => {
+    if (isAdmin && !await deleteManagedProject(id)) return
     setProjects((items) => items.filter((project) => project.id !== id))
     setPendingDeleteProjectId(null)
     navigateTo(pageHash(currentPage))
@@ -757,6 +758,29 @@ export default function App() {
       return true
     } catch (error) {
       setFeedback({ title: '작품 심사 상태를 변경하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
+  }
+
+  const deleteManagedProject = async (id: number) => {
+    try {
+      await deleteAdminProjectApi(id)
+      setAdminProjectsState((current) => ({
+        ...current,
+        projects: current.projects.filter((project) => project.id !== id),
+        totalElements: Math.max(0, current.totalElements - 1),
+      }))
+      setProjects((items) => items.filter((project) => project.id !== id))
+      setAdminProjectsReloadKey((key) => key + 1)
+      setGalleryReloadKey((key) => key + 1)
+      setMyProjectsReloadKey((key) => key + 1)
+      setFavoritesReloadKey((key) => key + 1)
+      setProjectDetailState((current) => current.projectId === id ? { projectId: null, project: null, error: '' } : current)
+      setMyProjectDetailState((current) => current.projectId === id ? { projectId: null, project: null, error: '' } : current)
+      setFeedback({ title: '작품이 삭제되었습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '작품을 삭제하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
       return false
     }
   }
@@ -902,6 +926,7 @@ export default function App() {
           onLoadNotice={loadAdminNotice}
           onApproveProject={(id) => setProjectApproval(id, 'approved')}
           onRejectProject={(id) => setProjectApproval(id, 'rejected')}
+          onDeleteProject={deleteManagedProject}
           onSaveNotice={saveNotice}
           onDeleteNotice={deleteAdminNotice}
         />

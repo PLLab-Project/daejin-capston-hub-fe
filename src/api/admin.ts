@@ -26,6 +26,12 @@ export function reviewAdminProject(projectId: number, projectStatus: AdminProjec
   })
 }
 
+export function deleteAdminProject(projectId: number) {
+  return apiRequest<null>(`/admin/project/delete/${projectId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function registerAdminNotice(request: RegisterNoticeRequest, files: File[]) {
   const formData = new FormData()
   formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))

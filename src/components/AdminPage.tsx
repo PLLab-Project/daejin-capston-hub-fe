@@ -28,6 +28,7 @@ interface AdminPageProps {
   onLoadNotice?: (id: number) => Promise<Notice>
   onApproveProject: (id: number) => Promise<boolean> | boolean
   onRejectProject: (id: number) => Promise<boolean> | boolean
+  onDeleteProject: (id: number) => Promise<boolean> | boolean
   onSaveNotice: (id: number | null, data: AdminNoticeData) => Promise<boolean> | boolean
   onDeleteNotice: (id: number) => Promise<boolean> | boolean
 }
@@ -102,6 +103,7 @@ export function AdminPage({
   onLoadNotice,
   onApproveProject,
   onRejectProject,
+  onDeleteProject,
   onSaveNotice,
   onDeleteNotice,
 }: AdminPageProps) {
@@ -115,6 +117,7 @@ export function AdminPage({
   const [pendingDeleteNoticeId, setPendingDeleteNoticeId] = useState<number | null>(null)
   const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState<number | null>(null)
   const [pendingRejectProjectId, setPendingRejectProjectId] = useState<number | null>(null)
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
   const [memberItems, setMemberItems] = useState(initialMembers)
   const [loadedReviewProject, setLoadedReviewProject] = useState<GalleryProject | null>(null)
   const [reviewError, setReviewError] = useState('')
@@ -232,6 +235,7 @@ export function AdminPage({
             if (await onApproveProject(id)) navigateHash(adminHash('projects'))
           }}
           onReject={setPendingRejectProjectId}
+          onDelete={setPendingDeleteProjectId}
         />
         <ConfirmModal
           open={pendingRejectProjectId !== null}
@@ -242,6 +246,19 @@ export function AdminPage({
           onConfirm={async () => {
             if (pendingRejectProjectId !== null && await onRejectProject(pendingRejectProjectId)) {
               setPendingRejectProjectId(null)
+              navigateHash(adminHash('projects'))
+            }
+          }}
+        />
+        <ConfirmModal
+          open={pendingDeleteProjectId !== null}
+          title="작품을 삭제하시겠습니까?"
+          description="삭제한 작품과 등록 파일은 복구할 수 없습니다."
+          confirmLabel="삭제"
+          onCancel={() => setPendingDeleteProjectId(null)}
+          onConfirm={async () => {
+            if (pendingDeleteProjectId !== null && await onDeleteProject(pendingDeleteProjectId)) {
+              setPendingDeleteProjectId(null)
               navigateHash(adminHash('projects'))
             }
           }}

@@ -70,7 +70,7 @@ export function ProjectDetail({
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [videoModalOpen, setVideoModalOpen] = useState(false)
   const canEdit = viewerRole === 'owner'
-  const canDelete = viewerRole === 'owner' || (viewerRole === 'admin' && !reviewMode)
+  const canDelete = viewerRole === 'owner' || viewerRole === 'admin'
   const canSlideImages = projectImages.length > visibleThumbnailCount
   const thumbnailTrackImages = canSlideImages
     ? getCircularImageSequence(carouselStartIndex, Math.min(visibleThumbnailCount + slideSteps, projectImages.length), projectImages.length)

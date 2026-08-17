@@ -157,7 +157,7 @@ export function modifyProject(projectId: number, request: ModifyProjectRequest, 
   formData.append('descriptionReport', files.descriptionReport)
   formData.append('projectZip', files.projectZip)
 
-  return apiRequest<number>(`/home/modify/${projectId}`, {
+  return apiRequest<number>(`/home/project/modify/${projectId}`, {
     method: 'PATCH',
     body: formData,
   })
