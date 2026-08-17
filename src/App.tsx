@@ -861,6 +861,7 @@ export default function App() {
         isAdmin={isAdmin}
         activeItem={activeItem}
         onMenuToggle={() => setMenuOpen((open) => !open)}
+        onMenuClose={() => setMenuOpen(false)}
         onGalleryClick={showGallery}
         onNoticeClick={showNotices}
         onRegisterClick={showRegistration}

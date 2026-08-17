@@ -19,6 +19,7 @@ interface HeaderProps {
   isAdmin?: boolean
   activeItem?: string
   onMenuToggle: () => void
+  onMenuClose: () => void
   onGalleryClick?: () => void
   onNoticeClick?: () => void
   onRegisterClick?: () => void
@@ -36,6 +37,7 @@ export function Header({
   isAdmin = false,
   activeItem = '갤러리',
   onMenuToggle,
+  onMenuClose,
   onGalleryClick,
   onNoticeClick,
   onRegisterClick,
@@ -48,7 +50,7 @@ export function Header({
 }: HeaderProps) {
   const navItems = isAdmin ? adminNavItems : userNavItems
   const handleAuthClick = () => {
-    if (menuOpen) onMenuToggle()
+    if (menuOpen) onMenuClose()
     if (isLoggedIn) {
       onLogoutClick()
       return
@@ -80,7 +82,7 @@ export function Header({
       event.preventDefault()
       action()
     }
-    if (menuOpen) onMenuToggle()
+    if (menuOpen) onMenuClose()
   }
 
   return (
