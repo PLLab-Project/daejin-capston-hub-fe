@@ -578,7 +578,8 @@ function FileUploadField({
   const maxFileSize = (isArchive ? 500 : 50) * 1024 * 1024
   const FileIcon = isArchive ? Archive : FileText
   const acceptedExtensions = accept.split(',').map((extension) => extension.trim().toLowerCase())
-  const rawExistingFileName = initialUrl ? getFileNameFromUrl(initialUrl, initialName || '기존 파일') : ''
+  const rawExistingFileName = initialName?.trim()
+    || (initialUrl ? getFileNameFromUrl(initialUrl, '기존 파일') : '')
   const fallbackExistingFileName = isArchive
     ? '기존 프로젝트 압축파일'
     : accept.includes('.hwp')
