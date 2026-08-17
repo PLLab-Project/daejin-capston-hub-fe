@@ -19,6 +19,11 @@ export interface ProjectPreviewResponse {
   bookmarked: boolean
 }
 
+export interface ProjectFileResponse {
+  fileUrl: string
+  originalName: string
+}
+
 export interface ProjectDetailResponse {
   projectId: number
   title: string
@@ -29,11 +34,16 @@ export interface ProjectDetailResponse {
   categoryName: string
   techStacks: string[]
   demoVideoUrl: string
-  thumbnailImageFileUrl: string
-  addImageFilesUrl: string[]
-  presentationReportFileUrl: string
-  descriptionReportFileUrl: string
-  projectZipFileUrl: string
+  thumbnailImageFile?: ProjectFileResponse
+  addImageFiles?: ProjectFileResponse[]
+  presentationReportFile?: ProjectFileResponse
+  descriptionReportFile?: ProjectFileResponse
+  projectZipFile?: ProjectFileResponse
+  thumbnailImageFileUrl?: string
+  addImageFilesUrl?: string[]
+  presentationReportFileUrl?: string
+  descriptionReportFileUrl?: string
+  projectZipFileUrl?: string
   bookMarked: boolean
   mine: boolean
 }
@@ -99,7 +109,13 @@ export interface RegisterProjectFiles {
 }
 
 export type ModifyProjectRequest = RegisterProjectRequest
-export type ModifyProjectFiles = RegisterProjectFiles
+export interface ModifyProjectFiles {
+  thumbnail?: File
+  addImage: File[]
+  presentationReport?: File
+  descriptionReport?: File
+  projectZip?: File
+}
 
 function createQuery(params: Record<string, string | number | Array<string | number> | undefined>) {
   const query = new URLSearchParams()
@@ -133,6 +149,12 @@ export function getProjectDetail(projectId: number) {
   return apiRequest<ProjectDetailResponse>(`/home/project/detail/${projectId}`)
 }
 
+export function deleteProject(projectId: number) {
+  return apiRequest<null>(`/home/project/delete/${projectId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function registerProject(request: RegisterProjectRequest, files: RegisterProjectFiles) {
   const formData = new FormData()
   formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
@@ -151,11 +173,11 @@ export function registerProject(request: RegisterProjectRequest, files: Register
 export function modifyProject(projectId: number, request: ModifyProjectRequest, files: ModifyProjectFiles) {
   const formData = new FormData()
   formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
-  formData.append('thumbnail', files.thumbnail)
+  if (files.thumbnail) formData.append('thumbnail', files.thumbnail)
   files.addImage.forEach((file) => formData.append('addImage', file))
-  formData.append('presentationReport', files.presentationReport)
-  formData.append('descriptionReport', files.descriptionReport)
-  formData.append('projectZip', files.projectZip)
+  if (files.presentationReport) formData.append('presentationReport', files.presentationReport)
+  if (files.descriptionReport) formData.append('descriptionReport', files.descriptionReport)
+  if (files.projectZip) formData.append('projectZip', files.projectZip)
 
   return apiRequest<number>(`/home/project/modify/${projectId}`, {
     method: 'PATCH',

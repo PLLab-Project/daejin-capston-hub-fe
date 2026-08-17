@@ -19,7 +19,7 @@ import { login as loginApi, signup as signupApi } from './api/auth'
 import { toggleProjectBookmark } from './api/bookmark'
 import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, getAdminProjects, modifyAdminNotice, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
 import { ApiError } from './api/client'
-import { getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
+import { deleteProject as deleteProjectApi, getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
 import { getMyProjectDetail, getMyProjectPreviews } from './api/myProjects'
 import { getMyProfile, updateMyProfile, type MypageProjectResponse, type MypageResponse } from './api/mypage'
@@ -712,9 +712,6 @@ export default function App() {
     const updatedProjectId = editingProjectId
     const categoryId = categoryIdByName.get(data.category)
     if (categoryId === undefined) throw new Error('선택한 분야 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.')
-    if (!data.thumbnail || !data.presentationReport || !data.descriptionReport || !data.projectZip) {
-      throw new Error('작품 수정에 필요한 파일을 모두 등록해 주세요.')
-    }
 
     await modifyProjectApi(updatedProjectId, {
       title: data.title,
@@ -741,8 +738,22 @@ export default function App() {
   }
 
   const deleteProject = async (id: number) => {
-    if (isAdmin && !await deleteManagedProject(id)) return
-    setProjects((items) => items.filter((project) => project.id !== id))
+    if (isAdmin) {
+      if (!await deleteManagedProject(id)) return
+    } else {
+      try {
+        await deleteProjectApi(id)
+        setProjects((items) => items.filter((project) => project.id !== id))
+        setGalleryReloadKey((key) => key + 1)
+        setMyProjectsReloadKey((key) => key + 1)
+        setFavoritesReloadKey((key) => key + 1)
+        setFeedback({ title: '작품이 삭제되었습니다.' })
+      } catch (error) {
+        setPendingDeleteProjectId(null)
+        setFeedback({ title: '작품을 삭제하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+        return
+      }
+    }
     setPendingDeleteProjectId(null)
     navigateTo(pageHash(currentPage))
   }
@@ -872,10 +883,15 @@ export default function App() {
             description: editingProject.longDescription,
             demoVideoUrl: editingProject.demoVideoUrl,
             thumbnailUrl: editingProject.thumbnailUrl,
+            thumbnailName: editingProject.thumbnailName,
             additionalImageUrls: editingProject.additionalImageUrls,
+            additionalImageNames: editingProject.additionalImageNames,
             presentationReportUrl: editingProject.presentationReportUrl,
+            presentationReportName: editingProject.presentationReportName,
             descriptionReportUrl: editingProject.descriptionReportUrl,
+            descriptionReportName: editingProject.descriptionReportName,
             projectZipUrl: editingProject.projectZipUrl,
+            projectZipName: editingProject.projectZipName,
             additionalImages: [],
           }}
           onCancel={() => {

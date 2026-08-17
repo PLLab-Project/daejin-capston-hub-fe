@@ -51,6 +51,12 @@ export function mapMyProjectPreview(project: ProjectPreviewResponse): GalleryPro
 }
 
 export function mapProjectDetail(project: ProjectDetailResponse): GalleryProject {
+  const thumbnailFile = project.thumbnailImageFile
+  const additionalImageFiles = project.addImageFiles ?? (project.addImageFilesUrl ?? []).map((fileUrl) => ({ fileUrl, originalName: '' }))
+  const presentationReportFile = project.presentationReportFile
+  const descriptionReportFile = project.descriptionReportFile
+  const projectZipFile = project.projectZipFile
+
   return {
     id: project.projectId,
     title: project.title,
@@ -67,11 +73,16 @@ export function mapProjectDetail(project: ProjectDetailResponse): GalleryProject
     bookmarked: Boolean(project.bookMarked),
     owned: Boolean(project.mine),
     approvalStatus: 'approved',
-    thumbnailUrl: resolveApiUrl(project.thumbnailImageFileUrl),
-    additionalImageUrls: (project.addImageFilesUrl ?? []).map(resolveApiUrl),
-    presentationReportUrl: resolveApiUrl(project.presentationReportFileUrl),
-    descriptionReportUrl: resolveApiUrl(project.descriptionReportFileUrl),
-    projectZipUrl: resolveApiUrl(project.projectZipFileUrl),
+    thumbnailUrl: resolveApiUrl(thumbnailFile?.fileUrl ?? project.thumbnailImageFileUrl),
+    thumbnailName: thumbnailFile?.originalName,
+    additionalImageUrls: additionalImageFiles.map((file) => resolveApiUrl(file.fileUrl)),
+    additionalImageNames: additionalImageFiles.map((file) => file.originalName),
+    presentationReportUrl: resolveApiUrl(presentationReportFile?.fileUrl ?? project.presentationReportFileUrl),
+    presentationReportName: presentationReportFile?.originalName,
+    descriptionReportUrl: resolveApiUrl(descriptionReportFile?.fileUrl ?? project.descriptionReportFileUrl),
+    descriptionReportName: descriptionReportFile?.originalName,
+    projectZipUrl: resolveApiUrl(projectZipFile?.fileUrl ?? project.projectZipFileUrl),
+    projectZipName: projectZipFile?.originalName,
   }
 }
 

@@ -22,10 +22,15 @@ export interface ProjectRegistrationData {
   descriptionReport?: File
   projectZip?: File
   thumbnailUrl?: string
+  thumbnailName?: string
   additionalImageUrls?: string[]
+  additionalImageNames?: string[]
   presentationReportUrl?: string
+  presentationReportName?: string
   descriptionReportUrl?: string
+  descriptionReportName?: string
   projectZipUrl?: string
+  projectZipName?: string
 }
 
 interface ProjectRegistrationPageProps {
@@ -43,6 +48,12 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
   const [description, setDescription] = useState(initialData?.description ?? '')
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([])
   const [additionalImages, setAdditionalImages] = useState<File[]>([])
+  const [retainedAdditionalImages, setRetainedAdditionalImages] = useState<Array<{ url: string; name: string }>>(() =>
+    (initialData?.additionalImageUrls ?? []).map((url, index) => ({
+      url,
+      name: initialData?.additionalImageNames?.[index] || getFileNameFromUrl(url, `기존 추가 이미지 ${index + 1}`),
+    })),
+  )
   const [presentationReport, setPresentationReport] = useState<File | null>(null)
   const [descriptionReport, setDescriptionReport] = useState<File | null>(null)
   const [projectZip, setProjectZip] = useState<File | null>(null)
@@ -74,7 +85,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
       return
     }
 
-    if (!thumbnailFiles[0] || !presentationReport || !descriptionReport || !projectZip) {
+    if (!isEditing && (!thumbnailFiles[0] || !presentationReport || !descriptionReport || !projectZip)) {
       setSubmitError(`${isEditing ? '수정할' : '등록할'} 대표 이미지, 발표 보고서, 설명 보고서, 프로젝트 압축파일을 모두 등록해 주세요.`)
       return
     }
@@ -82,6 +93,15 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
     const formData = new FormData(event.currentTarget)
     setSubmitting(true)
     try {
+      const retainedAdditionalImageFiles = isEditing
+        ? await Promise.all(retainedAdditionalImages.map(async (image) => {
+          const response = await fetch(image.url)
+          if (!response.ok) throw new Error(`기존 추가 이미지(${image.name})를 불러오지 못했습니다.`)
+          const blob = await response.blob()
+          return new File([blob], image.name, { type: blob.type || 'application/octet-stream' })
+        }))
+        : []
+
       await onSubmit({
         studentId: String(formData.get('studentId') ?? '').trim() || undefined,
         author: String(formData.get('author') ?? '').trim() || undefined,
@@ -92,7 +112,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
         description: description.trim(),
         demoVideoUrl: String(formData.get('demoVideoUrl') ?? '').trim(),
         thumbnail: thumbnailFiles[0],
-        additionalImages,
+        additionalImages: [...retainedAdditionalImageFiles, ...additionalImages],
         presentationReport: presentationReport ?? undefined,
         descriptionReport: descriptionReport ?? undefined,
         projectZip: projectZip ?? undefined,
@@ -204,6 +224,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
               mode="representative"
               boxClassName="h-28"
               initialUrls={initialData?.thumbnailUrl ? [initialData.thumbnailUrl] : []}
+              initialNames={initialData?.thumbnailName ? [initialData.thumbnailName] : []}
               onFilesChange={setThumbnailFiles}
             />
             <ImageUploadField
@@ -211,14 +232,16 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
               mode="additional"
               boxClassName="h-16 md:h-14"
               initialUrls={initialData?.additionalImageUrls}
+              initialNames={initialData?.additionalImageNames}
               onFilesChange={setAdditionalImages}
+              onExistingImagesChange={setRetainedAdditionalImages}
             />
           </div>
 
           <div className="space-y-3 md:space-y-4">
-            <FileUploadField label="발표 보고서 *" accept=".ppt,.pptx" hint="PPT · 50MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.presentationReportUrl} initialName="기존 발표 보고서" onFileChange={setPresentationReport} />
-            <FileUploadField label="설명 보고서 *" accept=".hwp" hint="HWP · 50MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.descriptionReportUrl} initialName="기존 설명 보고서" onFileChange={setDescriptionReport} />
-            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 500MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.projectZipUrl} initialName="기존 프로젝트 압축파일" onFileChange={setProjectZip} />
+            <FileUploadField label="발표 보고서 *" accept=".ppt,.pptx" hint="PPT · 50MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.presentationReportUrl} initialName={initialData?.presentationReportName || '기존 발표 보고서'} onFileChange={setPresentationReport} />
+            <FileUploadField label="설명 보고서 *" accept=".hwp" hint="HWP · 50MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.descriptionReportUrl} initialName={initialData?.descriptionReportName || '기존 설명 보고서'} onFileChange={setDescriptionReport} />
+            <FileUploadField label="프로젝트 압축파일 *" accept=".zip" hint="ZIP · 500MB" boxClassName="h-[30px] md:h-11" initialUrl={initialData?.projectZipUrl} initialName={initialData?.projectZipName || '기존 프로젝트 압축파일'} onFileChange={setProjectZip} />
           </div>
         </div>
 
@@ -273,13 +296,17 @@ function ImageUploadField({
   mode,
   boxClassName,
   initialUrls = [],
+  initialNames = [],
   onFilesChange,
+  onExistingImagesChange,
 }: {
   label: string
   mode: 'representative' | 'additional'
   boxClassName: string
   initialUrls?: string[]
+  initialNames?: string[]
   onFilesChange: (files: File[]) => void
+  onExistingImagesChange?: (images: Array<{ url: string; name: string }>) => void
 }) {
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -289,7 +316,7 @@ function ImageUploadField({
     .slice(0, mode === 'additional' ? 5 : 1)
     .map((url, index) => ({
       id: `existing-${index}-${url}`,
-      name: getFileNameFromUrl(url, mode === 'representative' ? '기존 대표 이미지' : `기존 추가 이미지 ${index + 1}`),
+      name: initialNames[index] || getFileNameFromUrl(url, mode === 'representative' ? '기존 대표 이미지' : `기존 추가 이미지 ${index + 1}`),
       url,
       existing: true,
     })))
@@ -303,7 +330,8 @@ function ImageUploadField({
 
   useEffect(() => {
     onFilesChange(previews.flatMap((preview) => preview.file ? [preview.file] : []))
-  }, [onFilesChange, previews])
+    onExistingImagesChange?.(previews.flatMap((preview) => preview.existing ? [{ url: preview.url, name: preview.name }] : []))
+  }, [onExistingImagesChange, onFilesChange, previews])
 
   useEffect(() => () => {
     previewsRef.current.forEach((preview) => {
@@ -438,16 +466,14 @@ function ImageUploadField({
                 {previews.map((preview, index) => (
                   <div key={preview.id} className="group relative h-12 w-12 flex-none overflow-hidden rounded-[3px] border border-neutral-200 bg-white md:h-11 md:w-11" title={preview.name}>
                     <img src={preview.url} alt={`추가 이미지 ${index + 1}`} className="h-full w-full object-cover" />
-                    {!preview.existing && (
-                      <button
-                        type="button"
-                        className="absolute right-0 top-0 grid h-3 w-3 place-items-center rounded-bl bg-black/60 text-white opacity-90 md:h-3.5 md:w-3.5"
-                        aria-label={`${preview.name} 삭제`}
-                        onClick={() => removePreview(preview.id)}
-                      >
-                        <X className="h-2 w-2" aria-hidden="true" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="absolute right-0 top-0 grid h-3 w-3 place-items-center rounded-bl bg-black/60 text-white opacity-90 md:h-3.5 md:w-3.5"
+                      aria-label={`${preview.name} 삭제`}
+                      onClick={() => removePreview(preview.id)}
+                    >
+                      <X className="h-2 w-2" aria-hidden="true" />
+                    </button>
                   </div>
                 ))}
                 {previews.length < maxFiles && (

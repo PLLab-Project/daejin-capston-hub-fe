@@ -18,8 +18,13 @@ export interface GalleryProject {
   owned: boolean
   approvalStatus: ProjectApprovalStatus
   thumbnailUrl?: string
+  thumbnailName?: string
   additionalImageUrls?: string[]
+  additionalImageNames?: string[]
   presentationReportUrl?: string
+  presentationReportName?: string
   descriptionReportUrl?: string
+  descriptionReportName?: string
   projectZipUrl?: string
+  projectZipName?: string
 }
