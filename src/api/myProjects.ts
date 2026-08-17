@@ -1,8 +1,8 @@
 import { apiRequest } from './client'
-import type { ProjectDetailResponse, ProjectPreviewResponse } from './home'
+import type { PageResponse, ProjectDetailResponse, ProjectPreviewResponse } from './home'
 
-export function getMyProjectPreviews() {
-  return apiRequest<ProjectPreviewResponse[]>('/my-project/preview')
+export function getMyProjectPreviews(page = 0, size = 12) {
+  return apiRequest<PageResponse<ProjectPreviewResponse>>(`/my-project/preview?page=${page}&size=${size}`)
 }
 
 export function getMyProjectDetail(projectId: number) {

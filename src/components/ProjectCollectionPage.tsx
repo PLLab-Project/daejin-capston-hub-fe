@@ -1,4 +1,5 @@
 import type { GalleryProject, ProjectApprovalStatus } from '../types/project'
+import { Pagination } from './Pagination'
 import { ProjectCard } from './ProjectCard'
 
 const approvalGroups: Array<{
@@ -26,6 +27,9 @@ interface ProjectCollectionPageProps {
   loading?: boolean
   errorMessage?: string
   onRetry?: () => void
+  page?: number
+  totalPages?: number
+  onPageChange?: (page: number) => void
   onBookmark: (id: number) => void
   onOpen: (id: number) => void
 }
@@ -37,6 +41,9 @@ export function ProjectCollectionPage({
   loading = false,
   errorMessage = '',
   onRetry,
+  page = 1,
+  totalPages = 1,
+  onPageChange,
   onBookmark,
   onOpen,
 }: ProjectCollectionPageProps) {
@@ -71,20 +78,31 @@ export function ProjectCollectionPage({
           {onRetry && <button type="button" className="mt-4 rounded-full bg-brand px-4 py-1.5 text-[10px] text-white md:text-[12px]" onClick={onRetry}>다시 시도</button>}
         </div>
       ) : projects.length > 0 ? (
-        groupByApprovalStatus ? (
-          <div className="flex flex-col gap-8 md:gap-10">
-            {visibleApprovalGroups.map((group) => (
-              <section key={group.status} aria-labelledby={`${group.status}-projects-heading`}>
-                <div className="mb-3 border-b border-neutral-200 pb-2 md:mb-4 md:pb-2.5">
-                  <h2 id={`${group.status}-projects-heading`} className="flex-none text-[9px] font-semibold leading-none text-neutral-500 md:text-[11px]">
-                    {group.label}
-                  </h2>
-                </div>
-                {renderProjectGrid(group.projects)}
-              </section>
-            ))}
-          </div>
-        ) : renderProjectGrid(projects)
+        <>
+          {groupByApprovalStatus ? (
+            <div className="flex flex-col gap-8 md:gap-10">
+              {visibleApprovalGroups.map((group) => (
+                <section key={group.status} aria-labelledby={`${group.status}-projects-heading`}>
+                  <div className="mb-3 border-b border-neutral-200 pb-2 md:mb-4 md:pb-2.5">
+                    <h2 id={`${group.status}-projects-heading`} className="flex-none text-[9px] font-semibold leading-none text-neutral-500 md:text-[11px]">
+                      {group.label}
+                    </h2>
+                  </div>
+                  {renderProjectGrid(group.projects)}
+                </section>
+              ))}
+            </div>
+          ) : renderProjectGrid(projects)}
+          {onPageChange && totalPages > 1 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onChange={onPageChange}
+              ariaLabel="작품 목록 페이지 이동"
+              className="mb-10 mt-auto pt-10"
+            />
+          )}
+        </>
       ) : (
         <div className="flex flex-1 items-center justify-center pb-20 text-center text-[11px] text-neutral-400 md:text-[13px]">
           {emptyMessage}

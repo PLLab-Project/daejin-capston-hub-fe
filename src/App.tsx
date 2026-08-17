@@ -31,6 +31,7 @@ import { navigateHash, noticeHash, pageHash, projectHash, readHashRoute, type Ap
 const initialFilters: FilterState = { year: [], category: [], sort: '최신순', search: '' }
 type AuthStep = 'closed' | 'login' | 'first-login'
 const homePageSize = 12
+const myProjectsPageSize = 12
 const noticePageSize = 20
 const initialRoute = typeof window === 'undefined'
   ? { page: 'gallery' as AppPage, projectId: null, noticeId: null, editingProjectId: null }
@@ -157,6 +158,7 @@ export default function App() {
   const [galleryReloadKey, setGalleryReloadKey] = useState(0)
   const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('')
   const [noticePage, setNoticePage] = useState(1)
+  const [myProjectsPage, setMyProjectsPage] = useState(1)
   const [noticeReloadKey, setNoticeReloadKey] = useState(0)
   const [projectDetailReloadKey, setProjectDetailReloadKey] = useState(0)
   const [noticeDetailReloadKey, setNoticeDetailReloadKey] = useState(0)
@@ -211,7 +213,7 @@ export default function App() {
   }, [noticeSearchKeyword, publicNoticeState.notices])
   const publicNoticeTotalPages = Math.max(1, Math.ceil(filteredPublicNotices.length / noticePageSize))
   const paginatedPublicNotices = filteredPublicNotices.slice((noticePage - 1) * noticePageSize, noticePage * noticePageSize)
-  const myProjectsQueryKey = `my-projects:${myProjectsReloadKey}`
+  const myProjectsQueryKey = `my-projects:${myProjectsPage}:${myProjectsReloadKey}`
   const myProjectsLoading = currentPage === 'my-projects' && myProjectsState.key !== myProjectsQueryKey
   const profileQueryKey = `profile:${profileReloadKey}`
   const profileLoading = currentPage === 'my-page' && profileState.key !== profileQueryKey
@@ -312,15 +314,15 @@ export default function App() {
     let cancelled = false
     const requestKey = myProjectsQueryKey
 
-    getMyProjectPreviews()
+    getMyProjectPreviews(myProjectsPage - 1, myProjectsPageSize)
       .then((response) => {
         if (cancelled) return
-        const loadedProjects = response.data.map(mapMyProjectPreview)
+        const loadedProjects = response.data.content.map(mapMyProjectPreview)
         setMyProjectsState({
           key: requestKey,
           projects: loadedProjects,
-          totalPages: 1,
-          totalElements: loadedProjects.length,
+          totalPages: response.data.totalPages,
+          totalElements: response.data.totalElements,
           error: '',
         })
       })
@@ -329,7 +331,7 @@ export default function App() {
       })
 
     return () => { cancelled = true }
-  }, [currentPage, isLoggedIn, myProjectsQueryKey])
+  }, [currentPage, isLoggedIn, myProjectsPage, myProjectsQueryKey])
 
   useEffect(() => {
     if (!isLoggedIn || selectedProjectId === null || currentPage !== 'my-projects') return
@@ -543,7 +545,10 @@ export default function App() {
   const showGallery = () => navigateTo(pageHash('gallery'))
   const showNotices = () => navigateTo(pageHash('notices'))
   const showRegistration = () => navigateTo(pageHash('register'))
-  const showMyProjects = () => navigateTo(pageHash('my-projects'))
+  const showMyProjects = () => {
+    setMyProjectsPage(1)
+    navigateTo(pageHash('my-projects'))
+  }
   const showFavorites = () => navigateTo(pageHash('favorites'))
   const showMyPage = () => navigateTo(pageHash('my-page'))
   const showAdmin = () => navigateTo(pageHash('admin'))
@@ -1004,6 +1009,12 @@ export default function App() {
           loading={myProjectsLoading}
           errorMessage={myProjectsState.error}
           onRetry={() => setMyProjectsReloadKey((key) => key + 1)}
+          page={myProjectsPage}
+          totalPages={myProjectsState.totalPages}
+          onPageChange={(nextPage) => {
+            setMyProjectsPage(nextPage)
+            window.scrollTo({ top: 0, behavior: 'auto' })
+          }}
           onBookmark={toggleBookmark}
           onOpen={showProject}
         />
