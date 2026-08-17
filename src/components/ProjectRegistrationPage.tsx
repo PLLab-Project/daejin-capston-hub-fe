@@ -101,6 +101,10 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
           return new File([blob], image.name, { type: blob.type || 'application/octet-stream' })
         }))
         : []
+      const finalAdditionalImages = await removeDuplicateFiles([
+        ...retainedAdditionalImageFiles,
+        ...additionalImages,
+      ])
 
       await onSubmit({
         studentId: String(formData.get('studentId') ?? '').trim() || undefined,
@@ -112,7 +116,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
         description: description.trim(),
         demoVideoUrl: String(formData.get('demoVideoUrl') ?? '').trim(),
         thumbnail: thumbnailFiles[0],
-        additionalImages: [...retainedAdditionalImageFiles, ...additionalImages],
+        additionalImages: finalAdditionalImages,
         presentationReport: presentationReport ?? undefined,
         descriptionReport: descriptionReport ?? undefined,
         projectZip: projectZip ?? undefined,
@@ -291,6 +295,29 @@ function getFileNameFromUrl(value: string, fallback: string) {
   }
 }
 
+function isGeneratedUuidFileName(value: string) {
+  return /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?:\.[a-z0-9]+)?$/i.test(value)
+}
+
+async function getFileFingerprint(file: Blob) {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function removeDuplicateFiles(files: File[]) {
+  const fingerprints = new Set<string>()
+  const uniqueFiles: File[] = []
+
+  for (const file of files) {
+    const fingerprint = await getFileFingerprint(file)
+    if (fingerprints.has(fingerprint)) continue
+    fingerprints.add(fingerprint)
+    uniqueFiles.push(file)
+  }
+
+  return uniqueFiles
+}
+
 function ImageUploadField({
   label,
   mode,
@@ -332,6 +359,39 @@ function ImageUploadField({
     onFilesChange(previews.flatMap((preview) => preview.file ? [preview.file] : []))
     onExistingImagesChange?.(previews.flatMap((preview) => preview.existing ? [{ url: preview.url, name: preview.name }] : []))
   }, [onExistingImagesChange, onFilesChange, previews])
+
+  useEffect(() => {
+    if (mode !== 'additional') return
+
+    let cancelled = false
+    const existingPreviews = previewsRef.current.filter((preview) => preview.existing)
+    if (existingPreviews.length < 2) return
+
+    void Promise.all(existingPreviews.map(async (preview) => {
+      try {
+        const response = await fetch(preview.url)
+        if (!response.ok) throw new Error('기존 이미지를 불러오지 못했습니다.')
+        return { id: preview.id, fingerprint: await getFileFingerprint(await response.blob()) }
+      } catch {
+        return { id: preview.id, fingerprint: `unavailable-${preview.id}` }
+      }
+    })).then((items) => {
+      if (cancelled) return
+
+      const fingerprints = new Set<string>()
+      const retainedIds = new Set(items.flatMap((item) => {
+        if (fingerprints.has(item.fingerprint)) return []
+        fingerprints.add(item.fingerprint)
+        return [item.id]
+      }))
+
+      setPreviews((current) => current.filter((preview) => !preview.existing || retainedIds.has(preview.id)))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
 
   useEffect(() => () => {
     previewsRef.current.forEach((preview) => {
@@ -518,7 +578,13 @@ function FileUploadField({
   const maxFileSize = (isArchive ? 500 : 50) * 1024 * 1024
   const FileIcon = isArchive ? Archive : FileText
   const acceptedExtensions = accept.split(',').map((extension) => extension.trim().toLowerCase())
-  const existingFileName = initialUrl ? getFileNameFromUrl(initialUrl, initialName || '기존 파일') : ''
+  const rawExistingFileName = initialUrl ? getFileNameFromUrl(initialUrl, initialName || '기존 파일') : ''
+  const fallbackExistingFileName = isArchive
+    ? '기존 프로젝트 압축파일'
+    : accept.includes('.hwp')
+      ? '기존 설명 보고서'
+      : '기존 발표 보고서'
+  const existingFileName = isGeneratedUuidFileName(rawExistingFileName) ? fallbackExistingFileName : rawExistingFileName
 
   const selectFiles = (files: FileList | File[]) => {
     const file = Array.from(files)[0]
