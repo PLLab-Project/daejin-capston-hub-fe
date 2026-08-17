@@ -11,13 +11,13 @@ import { ProjectCollectionPage } from './components/ProjectCollectionPage'
 import { ProjectRegistrationPage, type ProjectRegistrationData } from './components/ProjectRegistrationPage'
 import { MyPage, type UserProfile } from './components/MyPage'
 import { ConfirmModal } from './components/ConfirmModal'
-import { AdminPage, type AdminNoticeData } from './components/AdminPage'
+import { AdminPage, type AdminMember, type AdminMemberRole, type AdminNoticeData } from './components/AdminPage'
 import { Pagination } from './components/Pagination'
 import { StatusModal } from './components/StatusModal'
 import { LoginRequiredModal } from './components/LoginRequiredModal'
 import { login as loginApi, signup as signupApi } from './api/auth'
-import { toggleProjectBookmark } from './api/bookmark'
-import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, getAdminProjects, modifyAdminNotice, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse } from './api/admin'
+import { getBookmarkedProjectPreviews, toggleProjectBookmark } from './api/bookmark'
+import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, deleteAdminUser, getAdminProjects, getAdminUsers, modifyAdminNotice, modifyAdminUserRole, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse, type AdminUserResponse } from './api/admin'
 import { ApiError } from './api/client'
 import { deleteProject as deleteProjectApi, getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
@@ -32,6 +32,9 @@ const initialFilters: FilterState = { year: [], category: [], sort: '최신순',
 type AuthStep = 'closed' | 'login' | 'first-login'
 const homePageSize = 12
 const myProjectsPageSize = 12
+const favoriteProjectsPageSize = 12
+const adminProjectsPageSize = 12
+const adminMembersPageSize = 12
 const noticePageSize = 20
 const initialRoute = typeof window === 'undefined'
   ? { page: 'gallery' as AppPage, projectId: null, noticeId: null, editingProjectId: null }
@@ -70,6 +73,14 @@ interface NoticeCollectionState {
   key: string
   notices: Notice[]
   totalPages: number
+  error: string
+}
+
+interface AdminMemberCollectionState {
+  key: string
+  members: AdminMember[]
+  totalPages: number
+  totalElements: number
   error: string
 }
 
@@ -127,6 +138,16 @@ function mapAdminProjectPreview(project: AdminProjectPreviewResponse): GalleryPr
   }
 }
 
+function mapAdminUser(user: AdminUserResponse): AdminMember {
+  return {
+    id: user.userId,
+    name: user.name,
+    studentId: user.stdNum,
+    email: user.email,
+    role: hasAdminRole(user.role) ? 'admin' : 'general',
+  }
+}
+
 function hasAdminRole(role: string | null | undefined) {
   return role?.toUpperCase().includes('ADMIN') ?? false
 }
@@ -159,6 +180,11 @@ export default function App() {
   const [noticeSearchKeyword, setNoticeSearchKeyword] = useState('')
   const [noticePage, setNoticePage] = useState(1)
   const [myProjectsPage, setMyProjectsPage] = useState(1)
+  const [favoriteProjectsPage, setFavoriteProjectsPage] = useState(1)
+  const [adminProjectsPage, setAdminProjectsPage] = useState(1)
+  const [adminProjectsKeyword, setAdminProjectsKeyword] = useState('')
+  const [adminMembersPage, setAdminMembersPage] = useState(1)
+  const [adminMembersKeyword, setAdminMembersKeyword] = useState('')
   const [noticeReloadKey, setNoticeReloadKey] = useState(0)
   const [projectDetailReloadKey, setProjectDetailReloadKey] = useState(0)
   const [noticeDetailReloadKey, setNoticeDetailReloadKey] = useState(0)
@@ -166,6 +192,7 @@ export default function App() {
   const [profileReloadKey, setProfileReloadKey] = useState(0)
   const [favoritesReloadKey, setFavoritesReloadKey] = useState(0)
   const [adminProjectsReloadKey, setAdminProjectsReloadKey] = useState(0)
+  const [adminMembersReloadKey, setAdminMembersReloadKey] = useState(0)
   const [galleryState, setGalleryState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 0, totalElements: 0, error: '' })
   const [publicNoticeState, setPublicNoticeState] = useState<NoticeCollectionState>({ key: '', notices: [], totalPages: 0, error: '' })
   const [projectDetailState, setProjectDetailState] = useState<ProjectDetailState>({ projectId: null, project: null, error: '' })
@@ -175,6 +202,7 @@ export default function App() {
   const [profileState, setProfileState] = useState<ProfileState>({ key: '', data: null, error: '' })
   const [favoriteProjectsState, setFavoriteProjectsState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
   const [adminProjectsState, setAdminProjectsState] = useState<ProjectCollectionState>({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+  const [adminMembersState, setAdminMembersState] = useState<AdminMemberCollectionState>({ key: '', members: [], totalPages: 1, totalElements: 0, error: '' })
   const myProjects = useMemo(() => [
     ...myProjectsState.projects,
     ...projects.filter((project) => project.owned && !myProjectsState.projects.some((item) => item.id === project.id)),
@@ -214,13 +242,15 @@ export default function App() {
   const publicNoticeTotalPages = Math.max(1, Math.ceil(filteredPublicNotices.length / noticePageSize))
   const paginatedPublicNotices = filteredPublicNotices.slice((noticePage - 1) * noticePageSize, noticePage * noticePageSize)
   const myProjectsQueryKey = `my-projects:${myProjectsPage}:${myProjectsReloadKey}`
-  const myProjectsLoading = currentPage === 'my-projects' && myProjectsState.key !== myProjectsQueryKey
+  const myProjectsLoading = (currentPage === 'my-projects' || currentPage === 'my-page') && myProjectsState.key !== myProjectsQueryKey
   const profileQueryKey = `profile:${profileReloadKey}`
   const profileLoading = currentPage === 'my-page' && profileState.key !== profileQueryKey
-  const favoritesQueryKey = `favorites:${favoritesReloadKey}:${profileState.key}`
+  const favoritesQueryKey = `favorites:${favoriteProjectsPage}:${favoritesReloadKey}`
   const favoritesLoading = currentPage === 'favorites' && favoriteProjectsState.key !== favoritesQueryKey
-  const adminProjectsQueryKey = `admin-projects:${adminProjectsReloadKey}`
+  const adminProjectsQueryKey = `admin-projects:${adminProjectsKeyword}:${adminProjectsPage}:${adminProjectsReloadKey}`
   const adminProjectsLoading = currentPage === 'admin' && adminProjectsState.key !== adminProjectsQueryKey
+  const adminMembersQueryKey = `admin-members:${adminMembersKeyword}:${adminMembersPage}:${adminMembersReloadKey}`
+  const adminMembersLoading = currentPage === 'admin' && adminMembersState.key !== adminMembersQueryKey
   const selectedProject = currentPage === 'my-projects'
     ? myProjectDetailState.projectId === selectedProjectId ? myProjectDetailState.project : null
     : projectDetailState.projectId === selectedProjectId ? projectDetailState.project : null
@@ -317,6 +347,11 @@ export default function App() {
     getMyProjectPreviews(myProjectsPage - 1, myProjectsPageSize)
       .then((response) => {
         if (cancelled) return
+        const lastPage = Math.max(1, response.data.totalPages)
+        if (myProjectsPage > lastPage) {
+          setMyProjectsPage(lastPage)
+          return
+        }
         const loadedProjects = response.data.content.map(mapMyProjectPreview)
         setMyProjectsState({
           key: requestKey,
@@ -356,7 +391,7 @@ export default function App() {
   }, [currentPage, myProjects, projectDetailReloadKey, selectedProjectId, isLoggedIn])
 
   useEffect(() => {
-    if (!isLoggedIn || (currentPage !== 'my-page' && currentPage !== 'favorites')) return
+    if (!isLoggedIn || currentPage !== 'my-page') return
     let cancelled = false
     const requestKey = profileQueryKey
 
@@ -374,22 +409,24 @@ export default function App() {
   }, [currentPage, isLoggedIn, profileQueryKey])
 
   useEffect(() => {
-    if (!isLoggedIn || currentPage !== 'favorites' || profileState.key !== profileQueryKey || !profileState.data) return
+    if (!isLoggedIn || currentPage !== 'favorites') return
     let cancelled = false
     const requestKey = favoritesQueryKey
-    const references = profileState.data.myBookmarkProjects ?? []
 
-    Promise.allSettled(references.map((project) => getProjectDetail(project.projectId)))
-      .then((results) => {
+    getBookmarkedProjectPreviews(favoriteProjectsPage - 1, favoriteProjectsPageSize)
+      .then((response) => {
         if (cancelled) return
-        const loadedProjects = results.map((result, index) => result.status === 'fulfilled'
-          ? { ...mapProjectDetail(result.value.data), bookmarked: true }
-          : createProjectReference(references[index], false))
+        const lastPage = Math.max(1, response.data.totalPages)
+        if (favoriteProjectsPage > lastPage) {
+          setFavoriteProjectsPage(lastPage)
+          return
+        }
+        const loadedProjects = response.data.content.map((project) => ({ ...mapProjectPreview(project), bookmarked: true }))
         setFavoriteProjectsState({
           key: requestKey,
           projects: loadedProjects,
-          totalPages: 1,
-          totalElements: loadedProjects.length,
+          totalPages: response.data.totalPages,
+          totalElements: response.data.totalElements,
           error: '',
         })
       })
@@ -398,25 +435,64 @@ export default function App() {
       })
 
     return () => { cancelled = true }
-  }, [currentPage, favoritesQueryKey, isLoggedIn, profileQueryKey, profileState])
+  }, [currentPage, favoriteProjectsPage, favoritesQueryKey, isLoggedIn])
 
   useEffect(() => {
     if (!isLoggedIn || !isAdmin || currentPage !== 'admin') return
     let cancelled = false
     const requestKey = adminProjectsQueryKey
 
-    getAdminProjects()
+    getAdminProjects(adminProjectsKeyword, adminProjectsPage - 1, adminProjectsPageSize)
       .then((response) => {
         if (cancelled) return
-        const loadedProjects = response.data.map(mapAdminProjectPreview)
-        setAdminProjectsState({ key: requestKey, projects: loadedProjects, totalPages: 1, totalElements: loadedProjects.length, error: '' })
+        const lastPage = Math.max(1, response.data.totalPages)
+        if (adminProjectsPage > lastPage) {
+          setAdminProjectsPage(lastPage)
+          return
+        }
+        const loadedProjects = response.data.content.map(mapAdminProjectPreview)
+        setAdminProjectsState({
+          key: requestKey,
+          projects: loadedProjects,
+          totalPages: response.data.totalPages,
+          totalElements: response.data.totalElements,
+          error: '',
+        })
       })
       .catch((error) => {
         if (!cancelled) setAdminProjectsState({ key: requestKey, projects: [], totalPages: 1, totalElements: 0, error: getAuthErrorMessage(error, '관리할 작품을 불러오지 못했습니다.') })
       })
 
     return () => { cancelled = true }
-  }, [adminProjectsQueryKey, currentPage, isAdmin, isLoggedIn])
+  }, [adminProjectsKeyword, adminProjectsPage, adminProjectsQueryKey, currentPage, isAdmin, isLoggedIn])
+
+  useEffect(() => {
+    if (!isLoggedIn || !isAdmin || currentPage !== 'admin') return
+    let cancelled = false
+    const requestKey = adminMembersQueryKey
+
+    getAdminUsers(adminMembersKeyword, adminMembersPage - 1, adminMembersPageSize)
+      .then((response) => {
+        if (cancelled) return
+        const lastPage = Math.max(1, response.data.totalPages)
+        if (adminMembersPage > lastPage) {
+          setAdminMembersPage(lastPage)
+          return
+        }
+        setAdminMembersState({
+          key: requestKey,
+          members: response.data.content.map(mapAdminUser),
+          totalPages: response.data.totalPages,
+          totalElements: response.data.totalElements,
+          error: '',
+        })
+      })
+      .catch((error) => {
+        if (!cancelled) setAdminMembersState({ key: requestKey, members: [], totalPages: 1, totalElements: 0, error: getAuthErrorMessage(error, '회원 목록을 불러오지 못했습니다.') })
+      })
+
+    return () => { cancelled = true }
+  }, [adminMembersKeyword, adminMembersPage, adminMembersQueryKey, currentPage, isAdmin, isLoggedIn])
 
   useEffect(() => {
     if (selectedNoticeId === null || currentPage !== 'notices') return
@@ -549,9 +625,21 @@ export default function App() {
     setMyProjectsPage(1)
     navigateTo(pageHash('my-projects'))
   }
-  const showFavorites = () => navigateTo(pageHash('favorites'))
-  const showMyPage = () => navigateTo(pageHash('my-page'))
-  const showAdmin = () => navigateTo(pageHash('admin'))
+  const showFavorites = () => {
+    setFavoriteProjectsPage(1)
+    navigateTo(pageHash('favorites'))
+  }
+  const showMyPage = () => {
+    setMyProjectsPage(1)
+    navigateTo(pageHash('my-page'))
+  }
+  const showAdmin = () => {
+    setAdminProjectsPage(1)
+    setAdminProjectsKeyword('')
+    setAdminMembersPage(1)
+    setAdminMembersKeyword('')
+    navigateTo(pageHash('admin'))
+  }
   const showNotice = (notice: Notice) => {
     if (notice.externalUrl) {
       window.open(notice.externalUrl, '_blank', 'noopener,noreferrer')
@@ -572,9 +660,16 @@ export default function App() {
       setLoginError('로그인이 만료되었습니다. 다시 로그인해 주세요.')
       setAuthStep('login')
       setMyProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      setMyProjectsPage(1)
       setFavoriteProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      setFavoriteProjectsPage(1)
       setProfileState({ key: '', data: null, error: '' })
       setAdminProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+      setAdminProjectsPage(1)
+      setAdminProjectsKeyword('')
+      setAdminMembersState({ key: '', members: [], totalPages: 1, totalElements: 0, error: '' })
+      setAdminMembersPage(1)
+      setAdminMembersKeyword('')
       navigateTo(pageHash('gallery'), true)
     }
 
@@ -665,10 +760,17 @@ export default function App() {
     setAuthStep('closed')
     setProfile(initialProfile)
     setMyProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    setMyProjectsPage(1)
     setMyProjectDetailState({ projectId: null, project: null, error: '' })
     setFavoriteProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    setFavoriteProjectsPage(1)
     setProfileState({ key: '', data: null, error: '' })
     setAdminProjectsState({ key: '', projects: [], totalPages: 1, totalElements: 0, error: '' })
+    setAdminProjectsPage(1)
+    setAdminProjectsKeyword('')
+    setAdminMembersState({ key: '', members: [], totalPages: 1, totalElements: 0, error: '' })
+    setAdminMembersPage(1)
+    setAdminMembersKeyword('')
     showGallery()
   }
 
@@ -797,6 +899,38 @@ export default function App() {
       return true
     } catch (error) {
       setFeedback({ title: '작품을 삭제하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
+  }
+
+  const changeAdminMemberRole = async (id: number, role: AdminMemberRole) => {
+    try {
+      await modifyAdminUserRole(id, role === 'admin' ? 'ADMIN' : 'MEMBER')
+      setAdminMembersState((current) => ({
+        ...current,
+        members: current.members.map((member) => member.id === id ? { ...member, role } : member),
+      }))
+      setFeedback({ title: role === 'admin' ? '관리자 권한을 부여했습니다.' : '일반 회원으로 변경했습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '회원 권한을 변경하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
+      return false
+    }
+  }
+
+  const deleteManagedMember = async (id: number) => {
+    try {
+      await deleteAdminUser(id)
+      setAdminMembersState((current) => ({
+        ...current,
+        members: current.members.filter((member) => member.id !== id),
+        totalElements: Math.max(0, current.totalElements - 1),
+      }))
+      setAdminMembersReloadKey((key) => key + 1)
+      setFeedback({ title: '회원을 삭제했습니다.' })
+      return true
+    } catch (error) {
+      setFeedback({ title: '회원을 삭제하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
       return false
     }
   }
@@ -940,10 +1074,32 @@ export default function App() {
       ) : currentPage === 'admin' ? (
         <AdminPage
           projects={adminProjectsState.projects}
+          members={adminMembersState.members}
           notices={managedNotices}
           projectsLoading={adminProjectsLoading}
           projectsError={adminProjectsState.error}
+          projectsPage={adminProjectsPage}
+          projectsTotalPages={adminProjectsState.totalPages}
+          projectSearchKeyword={adminProjectsKeyword}
+          membersLoading={adminMembersLoading}
+          membersError={adminMembersState.error}
+          membersPage={adminMembersPage}
+          membersTotalPages={adminMembersState.totalPages}
+          memberSearchKeyword={adminMembersKeyword}
           onRetryProjects={() => setAdminProjectsReloadKey((key) => key + 1)}
+          onRetryMembers={() => setAdminMembersReloadKey((key) => key + 1)}
+          onProjectsPageChange={setAdminProjectsPage}
+          onMembersPageChange={setAdminMembersPage}
+          onProjectSearch={(keyword) => {
+            setAdminProjectsKeyword(keyword)
+            setAdminProjectsPage(1)
+          }}
+          onMemberSearch={(keyword) => {
+            setAdminMembersKeyword(keyword)
+            setAdminMembersPage(1)
+          }}
+          onMemberRoleChange={changeAdminMemberRole}
+          onDeleteMember={deleteManagedMember}
           onLoadProject={loadAdminProject}
           onLoadNotice={loadAdminNotice}
           onApproveProject={(id) => setProjectApproval(id, 'approved')}
@@ -1022,11 +1178,16 @@ export default function App() {
         <ProjectCollectionPage
           projects={favoriteProjects}
           emptyMessage="즐겨찾기한 작품이 없습니다."
-          loading={favoritesLoading || profileState.key !== profileQueryKey}
-          errorMessage={profileState.error || favoriteProjectsState.error}
+          loading={favoritesLoading}
+          errorMessage={favoriteProjectsState.error}
           onRetry={() => {
-            setProfileReloadKey((key) => key + 1)
             setFavoritesReloadKey((key) => key + 1)
+          }}
+          page={favoriteProjectsPage}
+          totalPages={favoriteProjectsState.totalPages}
+          onPageChange={(nextPage) => {
+            setFavoriteProjectsPage(nextPage)
+            window.scrollTo({ top: 0, behavior: 'auto' })
           }}
           onBookmark={toggleBookmark}
           onOpen={showProject}

@@ -1,4 +1,5 @@
 import { apiRequest } from './client'
+import type { PageResponse } from './home'
 
 export type AdminProjectStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
@@ -9,14 +10,44 @@ export interface AdminProjectPreviewResponse {
   projectStatus: AdminProjectStatus
 }
 
+export type AdminUserRole = 'ADMIN' | 'MEMBER'
+
+export interface AdminUserResponse {
+  userId: number
+  name: string
+  stdNum: string
+  email: string
+  role: AdminUserRole
+}
+
 export interface RegisterNoticeRequest {
   title: string
   contents: string
 }
 
-export function getAdminProjects(keyword?: string) {
-  const query = keyword?.trim() ? `?keyword=${encodeURIComponent(keyword.trim())}` : ''
-  return apiRequest<AdminProjectPreviewResponse[]>(`/admin/project${query}`)
+export function getAdminProjects(keyword = '', page = 0, size = 12) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  if (keyword.trim()) query.set('keyword', keyword.trim())
+  return apiRequest<PageResponse<AdminProjectPreviewResponse>>(`/admin/project?${query.toString()}`)
+}
+
+export function getAdminUsers(keyword = '', page = 0, size = 12) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  if (keyword.trim()) query.set('keyword', keyword.trim())
+  return apiRequest<PageResponse<AdminUserResponse>>(`/admin/user?${query.toString()}`)
+}
+
+export function modifyAdminUserRole(userId: number, userRole: AdminUserRole) {
+  return apiRequest<null>(`/admin/user/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ userRole }),
+  })
+}
+
+export function deleteAdminUser(userId: number) {
+  return apiRequest<null>(`/admin/user/${userId}`, {
+    method: 'DELETE',
+  })
 }
 
 export function reviewAdminProject(projectId: number, projectStatus: AdminProjectStatus) {

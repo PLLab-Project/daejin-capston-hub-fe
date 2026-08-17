@@ -20,10 +20,26 @@ export interface AdminNoticeData {
 
 interface AdminPageProps {
   projects: GalleryProject[]
+  members: AdminMember[]
   notices: Notice[]
   projectsLoading?: boolean
   projectsError?: string
+  projectsPage?: number
+  projectsTotalPages?: number
+  projectSearchKeyword?: string
+  membersLoading?: boolean
+  membersError?: string
+  membersPage?: number
+  membersTotalPages?: number
+  memberSearchKeyword?: string
   onRetryProjects?: () => void
+  onRetryMembers?: () => void
+  onProjectsPageChange?: (page: number) => void
+  onMembersPageChange?: (page: number) => void
+  onProjectSearch?: (keyword: string) => void
+  onMemberSearch?: (keyword: string) => void
+  onMemberRoleChange: (id: number, role: AdminMemberRole) => Promise<boolean> | boolean
+  onDeleteMember: (id: number) => Promise<boolean> | boolean
   onLoadProject?: (id: number) => Promise<GalleryProject>
   onLoadNotice?: (id: number) => Promise<Notice>
   onApproveProject: (id: number) => Promise<boolean> | boolean
@@ -33,21 +49,15 @@ interface AdminPageProps {
   onDeleteNotice: (id: number) => Promise<boolean> | boolean
 }
 
-type MemberRole = 'admin' | 'general'
+export type AdminMemberRole = 'admin' | 'general'
 
-interface Member {
+export interface AdminMember {
   id: number
   name: string
   studentId: string
   email: string
-  role: MemberRole
+  role: AdminMemberRole
 }
-
-const initialMembers: Member[] = [
-  { id: 1, name: '김민정', studentId: '20241472', email: 'minjung2283@gmail.com', role: 'admin' },
-  { id: 2, name: '홍길동', studentId: '20261001', email: 'gildong@daejin.ac.kr', role: 'general' },
-  { id: 3, name: '이서현', studentId: '20261002', email: 'seohyun@daejin.ac.kr', role: 'general' },
-]
 
 const tabItems: Array<{ id: AdminTab; label: string }> = [
   { id: 'projects', label: '작품 관리' },
@@ -95,10 +105,26 @@ function readAdminRoute(): AdminRouteState {
 
 export function AdminPage({
   projects,
+  members,
   notices,
   projectsLoading = false,
   projectsError = '',
+  projectsPage = 1,
+  projectsTotalPages = 1,
+  projectSearchKeyword = '',
+  membersLoading = false,
+  membersError = '',
+  membersPage = 1,
+  membersTotalPages = 1,
+  memberSearchKeyword = '',
   onRetryProjects,
+  onRetryMembers,
+  onProjectsPageChange,
+  onMembersPageChange,
+  onProjectSearch,
+  onMemberSearch,
+  onMemberRoleChange,
+  onDeleteMember,
   onLoadProject,
   onLoadNotice,
   onApproveProject,
@@ -118,7 +144,6 @@ export function AdminPage({
   const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState<number | null>(null)
   const [pendingRejectProjectId, setPendingRejectProjectId] = useState<number | null>(null)
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
-  const [memberItems, setMemberItems] = useState(initialMembers)
   const [loadedReviewProject, setLoadedReviewProject] = useState<GalleryProject | null>(null)
   const [reviewError, setReviewError] = useState('')
   const [loadedNotice, setLoadedNotice] = useState<Notice | null>(null)
@@ -142,15 +167,20 @@ export function AdminPage({
       setReviewError('')
       setLoadedNotice(null)
       setNoticeLoadError('')
-      setSearchDraft('')
-      setSearchKeyword('')
+      const routeKeyword = route.tab === 'projects'
+        ? projectSearchKeyword
+        : route.tab === 'members'
+          ? memberSearchKeyword
+          : ''
+      setSearchDraft(routeKeyword)
+      setSearchKeyword(routeKeyword)
       setPage(1)
       window.scrollTo({ top: 0, behavior: 'auto' })
     }
 
     window.addEventListener('hashchange', syncAdminRoute)
     return () => window.removeEventListener('hashchange', syncAdminRoute)
-  }, [])
+  }, [memberSearchKeyword, projectSearchKeyword])
 
   useEffect(() => {
     if (reviewProjectId === null || !onLoadProject) return
@@ -182,28 +212,26 @@ export function AdminPage({
     return () => { cancelled = true }
   }, [onLoadNotice, requestedNoticeId])
 
-  const filteredProjects = useMemo(() => {
-    const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
-    return keyword ? projects.filter((project) => project.title.toLocaleLowerCase('ko-KR').includes(keyword)) : projects
-  }, [projects, searchKeyword])
-
-  const filteredMembers = useMemo(() => {
-    const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
-    return keyword ? memberItems.filter((member) => [member.name, member.studentId].some((value) => value.toLocaleLowerCase('ko-KR').includes(keyword))) : memberItems
-  }, [memberItems, searchKeyword])
-
   const filteredNotices = useMemo(() => {
     const keyword = searchKeyword.trim().toLocaleLowerCase('ko-KR')
     return keyword ? notices.filter((notice) => notice.title.toLocaleLowerCase('ko-KR').includes(keyword)) : notices
   }, [notices, searchKeyword])
 
-  const activeItemCount = activeTab === 'projects' ? filteredProjects.length : activeTab === 'members' ? filteredMembers.length : filteredNotices.length
+  const activeItemCount = activeTab === 'notices' ? filteredNotices.length : 0
   const totalPages = Math.max(1, Math.ceil(activeItemCount / pageSize))
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * pageSize
-  const paginatedProjects = filteredProjects.slice(pageStart, pageStart + pageSize)
-  const paginatedMembers = filteredMembers.slice(pageStart, pageStart + pageSize)
   const paginatedNotices = filteredNotices.slice(pageStart, pageStart + pageSize)
+  const activePage = activeTab === 'projects'
+    ? Math.min(projectsPage, Math.max(1, projectsTotalPages))
+    : activeTab === 'members'
+      ? Math.min(membersPage, Math.max(1, membersTotalPages))
+      : currentPage
+  const activeTotalPages = activeTab === 'projects'
+    ? Math.max(1, projectsTotalPages)
+    : activeTab === 'members'
+      ? Math.max(1, membersTotalPages)
+      : totalPages
 
   if (reviewProjectId !== null && (!loadedReviewProject || reviewError)) {
     return (
@@ -311,8 +339,11 @@ export function AdminPage({
             role="search"
             onSubmit={(event) => {
               event.preventDefault()
-              setSearchKeyword(searchDraft.trim())
+              const keyword = searchDraft.trim()
+              setSearchKeyword(keyword)
               setPage(1)
+              if (activeTab === 'projects') onProjectSearch?.(keyword)
+              if (activeTab === 'members') onMemberSearch?.(keyword)
             }}
           >
             <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} className="block h-full w-full rounded-full bg-[#f0f0f0] px-3 pr-8 text-[9px] outline-none placeholder:text-neutral-400 md:px-4 md:pr-10 md:text-[11px]" placeholder={searchPlaceholder} aria-label={searchPlaceholder} />
@@ -337,14 +368,14 @@ export function AdminPage({
               ? <AdminStateRow message="작품 목록을 불러오는 중입니다." />
               : projectsError
                 ? <AdminStateRow message={projectsError} actionLabel="다시 시도" onAction={onRetryProjects} />
-                : <ProjectManagementTable projects={paginatedProjects} onOpen={(id) => navigateHash(`#/admin/projects/${id}`)} />
+                : <ProjectManagementTable projects={projects} onOpen={(id) => navigateHash(`#/admin/projects/${id}`)} />
           )}
           {activeTab === 'members' && (
-            <MemberManagementTable
-              memberItems={paginatedMembers}
-              onRoleChange={(id, role) => setMemberItems((items) => items.map((member) => member.id === id ? { ...member, role } : member))}
-              onDelete={setPendingDeleteMemberId}
-            />
+            membersLoading
+              ? <AdminStateRow message="회원 목록을 불러오는 중입니다." />
+              : membersError
+                ? <AdminStateRow message={membersError} actionLabel="다시 시도" onAction={onRetryMembers} />
+                : <MemberManagementTable memberItems={members} onRoleChange={onMemberRoleChange} onDelete={setPendingDeleteMemberId} />
           )}
           {activeTab === 'notices' && (
             <NoticeManagementTable
@@ -356,7 +387,17 @@ export function AdminPage({
           )}
         </div>
 
-        <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} ariaLabel="관리자 목록 페이지 이동" className="mb-10 mt-auto" />
+        <Pagination
+          page={activePage}
+          totalPages={activeTotalPages}
+          onChange={activeTab === 'projects' && onProjectsPageChange
+            ? onProjectsPageChange
+            : activeTab === 'members' && onMembersPageChange
+              ? onMembersPageChange
+              : setPage}
+          ariaLabel="관리자 목록 페이지 이동"
+          className="mb-10 mt-auto"
+        />
       </main>
 
       <ConfirmModal
@@ -375,9 +416,10 @@ export function AdminPage({
         description="삭제한 회원 정보는 복구할 수 없습니다."
         confirmLabel="삭제"
         onCancel={() => setPendingDeleteMemberId(null)}
-        onConfirm={() => {
-          if (pendingDeleteMemberId !== null) setMemberItems((items) => items.filter((member) => member.id !== pendingDeleteMemberId))
-          setPendingDeleteMemberId(null)
+        onConfirm={async () => {
+          if (pendingDeleteMemberId !== null && await onDeleteMember(pendingDeleteMemberId)) {
+            setPendingDeleteMemberId(null)
+          }
         }}
       />
     </>
@@ -398,7 +440,7 @@ function ProjectManagementTable({ projects, onOpen }: { projects: GalleryProject
   )
 }
 
-function MemberManagementTable({ memberItems, onRoleChange, onDelete }: { memberItems: Member[]; onRoleChange: (id: number, role: MemberRole) => void; onDelete: (id: number) => void }) {
+function MemberManagementTable({ memberItems, onRoleChange, onDelete }: { memberItems: AdminMember[]; onRoleChange: (id: number, role: AdminMemberRole) => Promise<boolean> | boolean; onDelete: (id: number) => void }) {
   const [openMemberId, setOpenMemberId] = useState<number | null>(null)
 
   return (
@@ -414,7 +456,7 @@ function MemberManagementTable({ memberItems, onRoleChange, onDelete }: { member
             </button>
             {openMemberId === member.id && (
               <div className="absolute left-0 top-full z-30 min-w-[48px] overflow-hidden rounded-[3px] border border-neutral-200 bg-white shadow-sm" role="menu">
-                <button type="button" role="menuitem" className="block h-6 w-full px-2 text-left text-[8px] text-neutral-500 hover:bg-[#eef3ff] md:text-[10px]" onClick={() => { onRoleChange(member.id, member.role === 'admin' ? 'general' : 'admin'); setOpenMemberId(null) }}>{member.role === 'admin' ? '일반' : '관리자'}</button>
+                <button type="button" role="menuitem" className="block h-6 w-full px-2 text-left text-[8px] text-neutral-500 hover:bg-[#eef3ff] md:text-[10px]" onClick={async () => { await onRoleChange(member.id, member.role === 'admin' ? 'general' : 'admin'); setOpenMemberId(null) }}>{member.role === 'admin' ? '일반' : '관리자'}</button>
                 <button type="button" role="menuitem" className="block h-6 w-full px-2 text-left text-[8px] text-red-400 hover:bg-red-50 md:text-[10px]" onClick={() => { onDelete(member.id); setOpenMemberId(null) }}>삭제</button>
               </div>
             )}
