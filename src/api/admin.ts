@@ -1,5 +1,5 @@
 import { apiRequest } from './client'
-import type { PageResponse } from './home'
+import type { PageResponse, RegisterProjectFiles, RegisterProjectRequest } from './home'
 
 export type AdminProjectStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
@@ -25,10 +25,30 @@ export interface RegisterNoticeRequest {
   contents: string
 }
 
+export interface RegisterAdminProjectRequest extends RegisterProjectRequest {
+  stdNum: string
+  name: string
+}
+
 export function getAdminProjects(keyword = '', page = 0, size = 12) {
   const query = new URLSearchParams({ page: String(page), size: String(size) })
   if (keyword.trim()) query.set('keyword', keyword.trim())
   return apiRequest<PageResponse<AdminProjectPreviewResponse>>(`/admin/project?${query.toString()}`)
+}
+
+export function registerAdminProject(request: RegisterAdminProjectRequest, files: RegisterProjectFiles) {
+  const formData = new FormData()
+  formData.append('request', new Blob([JSON.stringify(request)], { type: 'application/json' }))
+  formData.append('thumbnail', files.thumbnail)
+  files.addImage.forEach((file) => formData.append('addImage', file))
+  formData.append('presentationReport', files.presentationReport)
+  formData.append('descriptionReport', files.descriptionReport)
+  formData.append('projectZip', files.projectZip)
+
+  return apiRequest<number>('/admin/project', {
+    method: 'POST',
+    body: formData,
+  })
 }
 
 export function getAdminUsers(keyword = '', page = 0, size = 12) {

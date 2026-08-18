@@ -17,7 +17,7 @@ import { StatusModal } from './components/StatusModal'
 import { LoginRequiredModal } from './components/LoginRequiredModal'
 import { login as loginApi, signup as signupApi } from './api/auth'
 import { getBookmarkedProjectPreviews, toggleProjectBookmark } from './api/bookmark'
-import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, deleteAdminUser, getAdminProjects, getAdminUsers, modifyAdminNotice, modifyAdminUserRole, registerAdminNotice, reviewAdminProject, type AdminProjectPreviewResponse, type AdminUserResponse } from './api/admin'
+import { deleteAdminNotice as deleteAdminNoticeApi, deleteAdminProject as deleteAdminProjectApi, deleteAdminUser, getAdminProjects, getAdminUsers, modifyAdminNotice, modifyAdminUserRole, registerAdminNotice, registerAdminProject, reviewAdminProject, type AdminProjectPreviewResponse, type AdminUserResponse } from './api/admin'
 import { ApiError } from './api/client'
 import { deleteProject as deleteProjectApi, getCategories, getNoticeDetail, getProjectDetail, modifyProject as modifyProjectApi, registerProject as registerProjectApi, searchNotices, searchProjects, type CategoryResponse, type ProjectSearchParams } from './api/home'
 import { formatApiDate, mapMyProjectPreview, mapNoticeDetail, mapNoticePreview, mapProjectDetail, mapProjectPreview, mapProjectStatus } from './api/homeMappers'
@@ -790,28 +790,46 @@ export default function App() {
       throw new Error('필수 파일을 모두 등록해 주세요.')
     }
 
-    await registerProjectApi({
+    const projectRequest = {
       title: data.title,
       summary: data.summary,
       categoryId,
       techStacks: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
       description: data.description,
       demoVideoUrl: data.demoVideoUrl,
-    }, {
+    }
+    const projectFiles = {
       thumbnail: data.thumbnail,
       addImage: data.additionalImages,
       presentationReport: data.presentationReport,
       descriptionReport: data.descriptionReport,
       projectZip: data.projectZip,
-    })
+    }
+
+    if (isAdmin) {
+      if (!data.studentId || !data.author) throw new Error('등록할 학생의 학번과 이름을 입력해 주세요.')
+      await registerAdminProject({
+        ...projectRequest,
+        stdNum: data.studentId,
+        name: data.author,
+      }, projectFiles)
+    } else {
+      await registerProjectApi(projectRequest, projectFiles)
+    }
 
     setMyProjectsReloadKey((key) => key + 1)
     setGalleryReloadKey((key) => key + 1)
-    setFeedback({
-      title: '작품 등록이 완료되었습니다.',
-      description: '등록한 작품은 내 작품에서 확인할 수 있으며 관리자 승인 후 갤러리에 공개됩니다.',
-    })
-    showMyProjects()
+    if (isAdmin) {
+      setAdminProjectsReloadKey((key) => key + 1)
+      setFeedback({ title: '작품 등록이 완료되었습니다.', description: '등록한 작품은 관리자 작품 목록에서 확인할 수 있습니다.' })
+      showAdmin()
+    } else {
+      setFeedback({
+        title: '작품 등록이 완료되었습니다.',
+        description: '등록한 작품은 내 작품에서 확인할 수 있으며 관리자 승인 후 갤러리에 공개됩니다.',
+      })
+      showMyProjects()
+    }
   }
 
   const updateProject = async (data: ProjectRegistrationData) => {
@@ -1070,7 +1088,7 @@ export default function App() {
           />
         )
       ) : currentPage === 'register' ? (
-        <ProjectRegistrationPage adminMode={isAdmin} onCancel={showGallery} onSubmit={registerProject} />
+        <ProjectRegistrationPage adminMode={isAdmin} onCancel={isAdmin ? showAdmin : showGallery} onSubmit={registerProject} />
       ) : currentPage === 'admin' ? (
         <AdminPage
           projects={adminProjectsState.projects}
