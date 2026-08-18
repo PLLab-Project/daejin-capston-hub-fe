@@ -212,7 +212,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
             onClick={() => techStackInputRef.current?.focus()}
           >
             {techStacks.map((technology, index) => (
-              <span key={`${technology}-${index}`} className="flex h-6 items-center gap-1 rounded-[5px] bg-[#eef3ff] px-2 text-[9px] font-semibold text-[#1e57cd] md:h-8 md:gap-1.5 md:px-3 md:text-[12px]">
+              <span key={`${technology}-${index}`} className="flex h-[22px] items-center gap-1 rounded-[5px] bg-[#eef3ff] px-2 text-[9px] font-normal text-[#1e57cd] md:h-7 md:gap-1.5 md:px-3 md:text-[12px]">
                 {technology}
                 <button
                   type="button"
@@ -232,8 +232,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
               id={techStackInputId}
               value={techStackDraft}
               className="h-6 min-w-[120px] flex-1 bg-transparent px-1 text-[9px] text-neutral-700 outline-none placeholder:text-neutral-300 md:h-8 md:min-w-[180px] md:text-[12px]"
-              placeholder={techStacks.length === 0 ? '기술을 입력하고 Enter' : ''}
-              aria-describedby={`${techStackInputId}-helper`}
+              placeholder={techStacks.length === 0 ? '기술을 입력하고 Enter로 추가' : ''}
               required={techStacks.length === 0}
               onChange={(event) => setTechStackDraft(event.target.value)}
               onKeyDown={(event) => {
@@ -250,7 +249,6 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
               }}
             />
           </div>
-          <p id={`${techStackInputId}-helper`} className="mt-1 text-[8px] text-neutral-400 md:text-[10px]">Enter로 추가 · Backspace로 삭제</p>
         </div>
 
         <RegistrationField label="작품 설명 *">
