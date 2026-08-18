@@ -801,7 +801,7 @@ export default function App() {
       title: data.title,
       summary: data.summary,
       categoryId,
-      techStacks: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+      techStacks: data.techStacks,
       description: data.description,
       demoVideoUrl: data.demoVideoUrl,
     }
@@ -849,7 +849,7 @@ export default function App() {
       title: data.title,
       summary: data.summary,
       categoryId,
-      techStacks: data.techStack.split(',').map((technology) => technology.trim()).filter(Boolean),
+      techStacks: data.techStacks,
       description: data.description,
       demoVideoUrl: data.demoVideoUrl,
     }, {
@@ -1045,7 +1045,7 @@ export default function App() {
             title: editingProject.title,
             summary: editingProject.description,
             category: editingProject.category,
-            techStack: editingProject.techStack.join(', '),
+            techStacks: editingProject.techStack,
             description: editingProject.longDescription,
             demoVideoUrl: editingProject.demoVideoUrl,
             thumbnailUrl: editingProject.thumbnailUrl,

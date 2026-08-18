@@ -13,7 +13,7 @@ export interface ProjectRegistrationData {
   title: string
   summary: string
   category: ProjectCategory
-  techStack: string
+  techStacks: string[]
   description: string
   demoVideoUrl: string
   thumbnail?: File
@@ -43,8 +43,12 @@ interface ProjectRegistrationPageProps {
 
 export function ProjectRegistrationPage({ mode = 'create', adminMode = false, initialData, onCancel, onSubmit }: ProjectRegistrationPageProps) {
   const categoryRef = useRef<HTMLDivElement>(null)
+  const techStackInputRef = useRef<HTMLInputElement>(null)
+  const techStackInputId = useId()
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [category, setCategory] = useState<ProjectCategory | ''>(initialData?.category ?? '')
+  const [techStacks, setTechStacks] = useState<string[]>(initialData?.techStacks ?? [])
+  const [techStackDraft, setTechStackDraft] = useState('')
   const [description, setDescription] = useState(initialData?.description ?? '')
   const [thumbnailFiles, setThumbnailFiles] = useState<File[]>([])
   const [additionalImages, setAdditionalImages] = useState<File[]>([])
@@ -80,8 +84,14 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
   const submitForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setSubmitError('')
+    const submittedTechStacks = mergeTechStacks(techStacks, [techStackDraft])
     if (!category) {
       setCategoryOpen(true)
+      return
+    }
+    if (submittedTechStacks.length === 0) {
+      setSubmitError('기술 스택을 하나 이상 추가해 주세요.')
+      techStackInputRef.current?.focus()
       return
     }
 
@@ -112,7 +122,7 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
         title: String(formData.get('title') ?? '').trim(),
         summary: String(formData.get('summary') ?? '').trim(),
         category,
-        techStack: String(formData.get('techStack') ?? '').trim(),
+        techStacks: submittedTechStacks,
         description: description.trim(),
         demoVideoUrl: String(formData.get('demoVideoUrl') ?? '').trim(),
         thumbnail: thumbnailFiles[0],
@@ -195,12 +205,53 @@ export function ProjectRegistrationPage({ mode = 'create', adminMode = false, in
           </div>
         </div>
 
-        <RegistrationField
-          label="기술 스택 *"
-          helper="(사용한 기술, 언어, 프레임워크 등)"
-        >
-          <input name="techStack" className={inputClassName} placeholder="예) Python, TensorFlow, React, FastAPI" defaultValue={initialData?.techStack} required />
-        </RegistrationField>
+        <div>
+          <label htmlFor={techStackInputId} className={labelClassName}>기술 스택 *</label>
+          <div
+            className="flex min-h-[38px] w-full cursor-text flex-wrap items-center gap-1 rounded-[6px] border border-neutral-300 bg-white px-1.5 py-1 outline-none transition focus-within:border-brand focus-within:ring-2 focus-within:ring-[#dce9ff] md:min-h-[50px] md:gap-2 md:px-2 md:py-1.5"
+            onClick={() => techStackInputRef.current?.focus()}
+          >
+            {techStacks.map((technology, index) => (
+              <span key={`${technology}-${index}`} className="flex h-6 items-center gap-1 rounded-[5px] bg-[#eef3ff] px-2 text-[9px] font-semibold text-[#1e57cd] md:h-8 md:gap-1.5 md:px-3 md:text-[12px]">
+                {technology}
+                <button
+                  type="button"
+                  className="grid h-3 w-3 place-items-center text-[#7398e8] transition hover:text-brand md:h-4 md:w-4"
+                  aria-label={`${technology} 기술 스택 삭제`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setTechStacks((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                  }}
+                >
+                  <X className="h-2.5 w-2.5 md:h-3 md:w-3" strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+            <input
+              ref={techStackInputRef}
+              id={techStackInputId}
+              value={techStackDraft}
+              className="h-6 min-w-[120px] flex-1 bg-transparent px-1 text-[9px] text-neutral-700 outline-none placeholder:text-neutral-300 md:h-8 md:min-w-[180px] md:text-[12px]"
+              placeholder={techStacks.length === 0 ? '기술을 입력하고 Enter' : ''}
+              aria-describedby={`${techStackInputId}-helper`}
+              required={techStacks.length === 0}
+              onChange={(event) => setTechStackDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  setTechStacks((current) => mergeTechStacks(current, [techStackDraft]))
+                  setTechStackDraft('')
+                  return
+                }
+                if (event.key === 'Backspace' && techStackDraft === '') {
+                  setTechStacks((current) => current.slice(0, -1))
+                }
+              }}
+            />
+          </div>
+          <p id={`${techStackInputId}-helper`} className="mt-1 text-[8px] text-neutral-400 md:text-[10px]">Enter로 추가 · Backspace로 삭제</p>
+        </div>
 
         <RegistrationField label="작품 설명 *">
           <div className="relative">
@@ -275,6 +326,21 @@ function RegistrationField({ label, helper, children }: { label: string; helper?
       {children}
     </label>
   )
+}
+
+function mergeTechStacks(current: string[], values: string[]) {
+  const merged = [...current]
+  const normalizedValues = new Set(current.map((technology) => technology.toLocaleLowerCase()))
+
+  values.forEach((value) => {
+    const technology = value.trim().replace(/\s+/g, ' ')
+    const normalizedTechnology = technology.toLocaleLowerCase()
+    if (!technology || normalizedValues.has(normalizedTechnology)) return
+    normalizedValues.add(normalizedTechnology)
+    merged.push(technology)
+  })
+
+  return merged
 }
 
 interface ImagePreview {
