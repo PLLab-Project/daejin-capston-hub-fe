@@ -897,6 +897,7 @@ export default function App() {
         ...current,
         projects: current.projects.map((project) => project.id === id ? { ...project, approvalStatus: 'approved' } : project),
       }))
+      setGalleryReloadKey((key) => key + 1)
       setFeedback({ title: '작품을 승인했습니다.' })
       return true
     } catch (error) {
