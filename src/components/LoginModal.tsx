@@ -57,7 +57,9 @@ export function LoginModal({ open, errorMessage, submitting = false, onClose, on
           className="login-form"
           onSubmit={(event) => {
             event.preventDefault()
-            onSubmit({ studentId: studentId.trim(), password, remember })
+            const normalizedStudentId = studentId.trim()
+            if (!/^\d+$/.test(normalizedStudentId)) return
+            onSubmit({ studentId: normalizedStudentId, password, remember })
           }}
         >
           <label className="login-field">
@@ -66,11 +68,12 @@ export function LoginModal({ open, errorMessage, submitting = false, onClose, on
               ref={studentIdRef}
               type="text"
               inputMode="numeric"
+              pattern="[0-9]+"
               autoComplete="username"
               value={studentId}
               disabled={submitting}
               onChange={(event) => {
-                setStudentId(event.target.value)
+                setStudentId(event.target.value.replace(/\D/g, ''))
                 onInputChange?.()
               }}
               placeholder="학번을 입력하세요"

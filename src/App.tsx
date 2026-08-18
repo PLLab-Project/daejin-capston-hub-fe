@@ -895,7 +895,8 @@ export default function App() {
       await reviewAdminProject(id, 'APPROVED')
       setAdminProjectsState((current) => ({
         ...current,
-        projects: current.projects.map((project) => project.id === id ? { ...project, approvalStatus: 'approved' } : project),
+        projects: current.projects.filter((project) => project.id !== id),
+        totalElements: Math.max(0, current.totalElements - 1),
       }))
       setGalleryReloadKey((key) => key + 1)
       setFeedback({ title: '작품을 승인했습니다.' })
