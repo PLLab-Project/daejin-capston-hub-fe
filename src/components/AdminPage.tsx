@@ -43,7 +43,6 @@ interface AdminPageProps {
   onLoadProject?: (id: number) => Promise<GalleryProject>
   onLoadNotice?: (id: number) => Promise<Notice>
   onApproveProject: (id: number) => Promise<boolean> | boolean
-  onRejectProject: (id: number) => Promise<boolean> | boolean
   onDeleteProject: (id: number) => Promise<boolean> | boolean
   onSaveNotice: (id: number | null, data: AdminNoticeData) => Promise<boolean> | boolean
   onDeleteNotice: (id: number) => Promise<boolean> | boolean
@@ -128,7 +127,6 @@ export function AdminPage({
   onLoadProject,
   onLoadNotice,
   onApproveProject,
-  onRejectProject,
   onDeleteProject,
   onSaveNotice,
   onDeleteNotice,
@@ -142,7 +140,6 @@ export function AdminPage({
   const [viewNoticeId, setViewNoticeId] = useState<number | null>(initialAdminRoute.noticeId)
   const [pendingDeleteNoticeId, setPendingDeleteNoticeId] = useState<number | null>(null)
   const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState<number | null>(null)
-  const [pendingRejectProjectId, setPendingRejectProjectId] = useState<number | null>(null)
   const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<number | null>(null)
   const [loadedReviewProject, setLoadedReviewProject] = useState<GalleryProject | null>(null)
   const [reviewError, setReviewError] = useState('')
@@ -262,21 +259,7 @@ export function AdminPage({
           onApprove={async (id) => {
             if (await onApproveProject(id)) navigateHash(adminHash('projects'))
           }}
-          onReject={setPendingRejectProjectId}
           onDelete={setPendingDeleteProjectId}
-        />
-        <ConfirmModal
-          open={pendingRejectProjectId !== null}
-          title="작품 승인을 반려하시겠습니까?"
-          description="반려된 작품은 내 작품에서 승인 거부 상태로 표시됩니다."
-          confirmLabel="반려"
-          onCancel={() => setPendingRejectProjectId(null)}
-          onConfirm={async () => {
-            if (pendingRejectProjectId !== null && await onRejectProject(pendingRejectProjectId)) {
-              setPendingRejectProjectId(null)
-              navigateHash(adminHash('projects'))
-            }
-          }}
         />
         <ConfirmModal
           open={pendingDeleteProjectId !== null}

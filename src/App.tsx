@@ -890,14 +890,14 @@ export default function App() {
     navigateTo(pageHash(currentPage))
   }
 
-  const setProjectApproval = async (id: number, approvalStatus: 'approved' | 'rejected') => {
+  const approveProject = async (id: number) => {
     try {
-      await reviewAdminProject(id, approvalStatus === 'approved' ? 'APPROVED' : 'REJECTED')
+      await reviewAdminProject(id, 'APPROVED')
       setAdminProjectsState((current) => ({
         ...current,
-        projects: current.projects.map((project) => project.id === id ? { ...project, approvalStatus } : project),
+        projects: current.projects.map((project) => project.id === id ? { ...project, approvalStatus: 'approved' } : project),
       }))
-      setFeedback({ title: approvalStatus === 'approved' ? '작품을 승인했습니다.' : '작품 승인을 반려했습니다.' })
+      setFeedback({ title: '작품을 승인했습니다.' })
       return true
     } catch (error) {
       setFeedback({ title: '작품 심사 상태를 변경하지 못했습니다.', description: getAuthErrorMessage(error, '잠시 후 다시 시도해 주세요.') })
@@ -1127,8 +1127,7 @@ export default function App() {
           onDeleteMember={deleteManagedMember}
           onLoadProject={loadAdminProject}
           onLoadNotice={loadAdminNotice}
-          onApproveProject={(id) => setProjectApproval(id, 'approved')}
-          onRejectProject={(id) => setProjectApproval(id, 'rejected')}
+          onApproveProject={approveProject}
           onDeleteProject={deleteManagedProject}
           onSaveNotice={saveNotice}
           onDeleteNotice={deleteAdminNotice}

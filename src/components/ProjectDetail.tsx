@@ -16,7 +16,6 @@ interface ProjectDetailProps {
   onDelete?: (id: number) => void
   reviewMode?: boolean
   onApprove?: (id: number) => void
-  onReject?: (id: number) => void
 }
 
 const visibleThumbnailCount = 3
@@ -60,7 +59,6 @@ export function ProjectDetail({
   onDelete,
   reviewMode = false,
   onApprove,
-  onReject,
 }: ProjectDetailProps) {
   const projectImages = getProjectImages(project)
   const initialImageIndex = project.thumbnailUrl ? 0 : Math.min(1, projectImages.length - 1)
@@ -127,10 +125,7 @@ export function ProjectDetail({
               </button>
             )}
             {reviewMode && (
-              <>
-                <button type="button" className="detail-action-button" onClick={() => onApprove?.(project.id)}>승인</button>
-                <button type="button" className="detail-action-button is-danger" onClick={() => onReject?.(project.id)}>반려</button>
-              </>
+              <button type="button" className="detail-action-button" onClick={() => onApprove?.(project.id)}>승인</button>
             )}
           </div>
         )}
@@ -144,7 +139,6 @@ export function ProjectDetail({
             {canEdit && <button type="button" className="detail-action-button" onClick={() => onEdit?.(project.id)}>수정</button>}
             {canDelete && <button type="button" className="detail-action-button is-danger" onClick={() => onDelete?.(project.id)}>삭제</button>}
             {reviewMode && <button type="button" className="detail-action-button" onClick={() => onApprove?.(project.id)}>승인</button>}
-            {reviewMode && <button type="button" className="detail-action-button is-danger" onClick={() => onReject?.(project.id)}>반려</button>}
           </div>
         )}
       </div>
