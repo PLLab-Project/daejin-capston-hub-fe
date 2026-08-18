@@ -208,9 +208,10 @@ export default function App() {
     ...projects.filter((project) => project.owned && !myProjectsState.projects.some((item) => item.id === project.id)),
   ], [myProjectsState.projects, projects])
   const favoriteProjects = favoriteProjectsState.projects
-  const editingProject = myProjectDetailState.projectId === editingProjectId
-    ? myProjectDetailState.project
-    : myProjects.find((project) => project.id === editingProjectId)
+  const editingProjectCandidate = currentPage === 'my-projects'
+    ? myProjectDetailState.projectId === editingProjectId ? myProjectDetailState.project : null
+    : projectDetailState.projectId === editingProjectId ? projectDetailState.project : null
+  const editingProject = editingProjectCandidate?.owned ? editingProjectCandidate : null
 
   const categoryIdByName = useMemo(() => new Map(categories.map((category) => [category.name, category.categoryId])), [categories])
   const categoryOptions = useMemo(() => {
@@ -779,8 +780,14 @@ export default function App() {
   }
 
   const startEditingProject = (id: number) => {
+    if (!isLoggedIn || selectedProject?.id !== id || !selectedProject.owned) return
     const source: ProjectSourcePage = currentPage === 'my-projects' || currentPage === 'favorites' ? currentPage : 'gallery'
     navigateTo(projectHash(id, source, true))
+  }
+
+  const requestProjectDeletion = (id: number) => {
+    if (!isAdmin && (!isLoggedIn || selectedProject?.id !== id || !selectedProject.owned)) return
+    setPendingDeleteProjectId(id)
   }
 
   const registerProject = async (data: ProjectRegistrationData) => {
@@ -1168,12 +1175,12 @@ export default function App() {
         <ProjectDetail
           key={selectedProject.id}
           project={selectedProject}
-          viewerRole={isAdmin ? 'admin' : currentPage === 'my-projects' || (isLoggedIn && selectedProject.owned) ? 'owner' : 'guest'}
+          viewerRole={isAdmin ? 'admin' : isLoggedIn && selectedProject.owned ? 'owner' : 'guest'}
           backLabel={currentPage === 'favorites' ? '즐겨찾기' : currentPage === 'my-projects' ? '내 작품' : '갤러리'}
           onBack={closeProject}
           onBookmark={toggleBookmark}
           onEdit={startEditingProject}
-          onDelete={setPendingDeleteProjectId}
+          onDelete={requestProjectDeletion}
         />
       ) : currentPage === 'my-projects' ? (
         <ProjectCollectionPage
